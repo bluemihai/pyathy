@@ -73,6 +73,11 @@ def version_line():
     return f"pyathy {__version__} ({origin()})"
 
 
+def title_line(styler):
+    """The dim first line of the report, `steps` and -h: which pyathy answered, from where."""
+    return styler.style(2, f"pyathy {__version__} · {origin()}")
+
+
 class Report:
     """pyathy's own output instead of pytest's. By default each scenario's run as a terminal
     would show it (prompts, typed answers, boards), then its ✔/✘ line with the reason under a
@@ -386,7 +391,7 @@ def run(args):
         print(f"pyathy: no .feature files in {', '.join(targets)}")
         return 2
     styler = Styler()
-    print(styler.style(2, f"pyathy {__version__} · {origin()}"))
+    print(title_line(styler))
     good, broken = [], 0
     for path in files:
         if (problem := gherkin_problem(path)) is None:
@@ -446,13 +451,15 @@ def main():
     if args[:1] == ["init"]:
         sys.exit(init())
     if args[:1] in (["-h"], ["--help"]):
-        print(help_text(Styler()) + "\n\n" + version_line())
+        styler = Styler()
+        print(title_line(styler) + "\n" + help_text(styler))
         sys.exit(0)
     if args[:1] in (["-v"], ["--version"]):
         print(version_line())
         sys.exit(0)
     if args[:1] == ["steps"]:
-        print(steps_text(Styler(), own_steps()))
+        styler = Styler()
+        print(title_line(styler) + "\n" + steps_text(styler, own_steps()))
         sys.exit(0)
     sys.exit(run(args))
 
