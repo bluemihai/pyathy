@@ -13,7 +13,7 @@ import sys
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from .program import Program, ProgramError
+from .program import Program, ProgramError, constant
 
 
 REGISTERED = []  # (pattern, file) of every step defined through step(), for `pyathy steps`
@@ -197,16 +197,28 @@ def pytest_bdd_after_scenario(request, feature, scenario):
 
 # ---- files ---------------------------------------------------------------------
 
-@step(r'a file "(?P<name>[^"]+)" containing "(?P<text>[^"]*)"')
+NAME = r'(?P<name>"[^"]+"|[A-Z][A-Z0-9_]*)'  # "game.txt", or a constant of the program: SAVE_FILE_NAME
+
+
+def file_name(program, name):
+    """The file a Files step names: a quoted literal, or an ALL_CAPS constant read from the
+    program file (`SAVE_FILE_NAME = "game.txt"` at its top level), so the scenario follows the
+    program when the file is renamed there."""
+    if name.startswith('"'):
+        return name[1:-1]
+    return constant(program.app, name)
+
+
+@step(rf'a file {NAME} containing "(?P<text>[^"]*)"')
 def file_with_line(program, name, text):
     """A one-line file in the program's folder before it starts (written into the copy)."""
-    program.write_file(name, text + "\n")
+    program.write_file(file_name(program, name), text + "\n")
 
 
-@step(r'a file "(?P<name>[^"]+)" with:?')
+@step(rf'a file {NAME} with:?')
 def file_with(program, name, docstring):
     """The same with several lines, between two lines of three quotes."""
-    program.write_file(name, docstring + "\n")
+    program.write_file(file_name(program, name), docstring + "\n")
 
 
 def file_text(program, name):
@@ -218,8 +230,9 @@ def file_text(program, name):
         return f.read()
 
 
-@step(r'a file "(?P<name>[^"]+)" is written')
+@step(rf'a file {NAME} is written')
 def file_written(program, name):
+    name = file_name(program, name)
     program.settle()
     if name not in program.changed_files():
         if os.path.isfile(os.path.join(program.workdir or "", name)):
@@ -240,15 +253,17 @@ def _wrote(program):
     return f"; it wrote: {', '.join(written)}" if written else "; it wrote no file"
 
 
-@step(r'the file "(?P<name>[^"]+)" contains "(?P<text>[^"]*)"')
+@step(rf'the file {NAME} contains "(?P<text>[^"]*)"')
 def file_contains(program, name, text):
+    name = file_name(program, name)
     if norm(text) not in norm(file_text(program, name)):
         fail(program, f'expected the file "{name}" to contain "{text}"')
 
 
-@step(r'the file "(?P<name>[^"]+)" contains:?')
+@step(rf'the file {NAME} contains:?')
 def file_shows(program, name, docstring):
     """These lines in a row, like `the output shows:`."""
+    name = file_name(program, name)
     want = [line.rstrip().lower() for line in docstring.splitlines()]
     have = [line.rstrip().lower() for line in file_text(program, name).splitlines()]
     for i in range(len(have) - len(want) + 1):

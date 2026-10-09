@@ -87,6 +87,7 @@ the parts you replace in cyan).
 | `a file "game.txt" is written` / `no file is written` | the program made a file, or changed one |
 | `the file "game.txt" contains "round 4"` | anywhere in the file |
 | `the file "game.txt" contains:` + lines between `"""` | these lines, in a row |
+| `a file SAVE_FILE_NAME with:` | in every file step, an unquoted ALL_CAPS name is read from your program: `SAVE_FILE_NAME = "game.txt"` at its top |
 | `the program is started again` | stop it and start it over in the same folder, so the files it wrote are still there |
 
 ## Start from a saved state
@@ -119,6 +120,26 @@ Feature: Counter
     Then a file "count.txt" is written
     When the program is started again
     Then "Count: 2" is printed
+```
+
+Name the file by a constant of your program instead, and the scenario survives a rename: with
+`SAVE_FILE_NAME = "count.txt"` at the top of `main.py`, write the name unquoted in any file step.
+pyathy reads the constant from your program (it does not run it), so changing it to
+`"state.txt"` later changes the scenario too.
+
+```gherkin
+  Scenario: it continues from the saved count (the file named by the program)
+    Given a file SAVE_FILE_NAME with:
+      """
+      3
+      """
+    When I start the program
+    Then "Count: 3" is printed
+    When I input enter, q
+    Then the file SAVE_FILE_NAME contains:
+      """
+      4
+      """
 ```
 
 ## Your own steps

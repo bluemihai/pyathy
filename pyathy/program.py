@@ -6,6 +6,7 @@ So "I input 4" then "I roll 6" and "I roll 6" then "I input 4" both work: inputs
 rolls are consumed in their own order, whichever the program asks for first.
 """
 
+import ast
 import functools
 import hashlib
 import os
@@ -97,6 +98,46 @@ def student_python(folder):
         raise ProgramError(f"{how} has Python {'.'.join(version)} ({path}); pyathy needs Python "
                            f"{'.'.join(map(str, OLDEST_PYTHON))} or newer to run your program")
     return path, f"{how}, Python {'.'.join(version)}"
+
+
+def constant(app, name):
+    """The string a module-level `NAME = "…"` in the program file assigns, read with ast (the
+    program is not run). A scenario names a file by such a constant (`a file SAVE_FILE_NAME
+    with:`), so renaming the file in the program never touches the scenario."""
+    short = os.path.basename(app)
+    if not os.path.exists(app):
+        raise ProgramError(f"there is no {short} in {os.path.dirname(app)}")
+    with open(app, encoding="utf-8", errors="replace") as f:
+        source = f.read()
+    try:
+        tree = ast.parse(source, filename=short)
+    except SyntaxError as e:
+        raise ProgramError(f"{short} has a syntax error on line {e.lineno}, so {name} could not be read:"
+                           f" {e.msg}") from None
+    found = None
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if any(isinstance(t, ast.Name) and t.id == name for t in targets) and getattr(node, "value", None) is not None:
+            found = node
+    if found is None:
+        raise ProgramError(f'{short} has no {name} (the scenario needs it: put {name} = "…" at the top of {short})')
+    text = _literal(found.value)
+    if text is None:
+        line = ast.get_source_segment(source, found) or f"{name} = …"
+        raise ProgramError(f"{short} line {found.lineno}: {name} is not a plain string, so the scenario cannot"
+                           f' read the file name from it (it needs {name} = "…"):\n    {line}')
+    return text
+
+
+def _literal(node):
+    """A string literal, or literals joined with +; else None."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _literal(node.left), _literal(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
 
 
 class Program:

@@ -70,6 +70,7 @@ STEPS = {
         ("no file is written", ""),
         ('the file {"game.txt"} contains {"round 4"}', "anywhere in the file (case ignored)"),
         ('the file {"game.txt"} contains:', "these lines in a row"),
+        ("a file {SAVE_FILE_NAME} with:", 'in every file step, an unquoted ALL_CAPS name is read\nfrom your program: SAVE_FILE_NAME = "game.txt" at its top'),
         ("the program is started again", "stop it and start it over in the same folder,\nso the files it wrote are still there"),
     ],
 }
