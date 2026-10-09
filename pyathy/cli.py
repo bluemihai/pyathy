@@ -19,7 +19,7 @@ from pytest_bdd.parser import render_string
 from pytest_bdd.scenario import scenario_wrapper_template_registry
 
 from . import __version__
-from .help import BOLD, DIM, GREEN, RED, Styler, help_text, own_steps, steps_text
+from .help import BOLD, DIM, GREEN, PLACEHOLDER, RED, Styler, help_text, own_steps, steps_text, suggest
 from .lastrun import LastRun, NextFailure, key
 from .program import ProgramError, plain, student_python
 
@@ -179,6 +179,10 @@ class Report:
             if m:
                 return self.paint(line[:m.start()], GREEN) + self.paint(line[m.start():], RED)
             return self.paint(line, GREEN)
+        if line.startswith("did you mean: "):  # the suggested step in the placeholder colour
+            return "did you mean: " + self.style(PLACEHOLDER, line[len("did you mean: "):])
+        if line == "run pyathy steps for the list":
+            return "run " + self.style(PLACEHOLDER, "pyathy steps") + " for the list"
         if line.startswith("closest line printed:"):
             return self.paint(line, RED, tokens=False)
         if line.startswith(("note:", "the program is waiting for ", "the program has ended")):
@@ -220,8 +224,12 @@ class Report:
             print(f"✘ could not load the features: {last[0].removeprefix('E   ')}")
 
     def pytest_bdd_step_func_lookup_error(self, request, feature, scenario, step, exception):
+        from . import steps
+        own = [pattern for pattern, file, _, _ in steps.REGISTERED if file != steps.__file__]
+        closest = suggest(step.name, own)
+        hint = f"did you mean: {closest}" if closest else "run pyathy steps for the list"
         self.errors[request.node.nodeid] = (f"line {step.line_number}: pyathy has no step that matches\n"
-                                            f"    {step.keyword} {step.name}")
+                                            f"    {step.keyword} {step.name}\n{hint}")
 
     def pytest_runtest_makereport(self, item, call):
         if hasattr(item, "pyathy_program"):

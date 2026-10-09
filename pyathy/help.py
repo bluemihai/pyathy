@@ -4,6 +4,7 @@ Text here is marked up with {braces} around the parts a student replaces (`I inp
 a Styler turns them into a colour on a terminal and drops them when piped (colour_ok()).
 """
 
+import difflib
 import os
 import pathlib
 import re
@@ -199,6 +200,79 @@ def steps_text(styler, own):
         for pattern in patterns:
             out += ["  " + styler.own(pattern)]
     return "\n".join(out + ["", STEPS_OUTRO])
+
+
+# ---- did you mean: the closest step to a line no step matches --------------------
+
+# The "(or: …)" forms of the steps above, so a line written the other way is suggested that way
+ALSO = ["{Ann} rolls {4} and {6}", "{red} rolls {3} and answers {2}", "it is {red}'s turn",
+        "{red} moves from {0} to {3}", "I answer {4}", "I type {4}", "I enter {4}"]
+SUGGEST_RATIO = 0.75  # how alike the line and the suggestion must be (difflib ratio, 0..1)
+WORD = re.compile(r'\S*\{[^{}]*\}\S*|"[^"]*"\S*|\S+')
+
+
+def _fits(part, value, own):
+    """Whether the line's `value` can stand in for a template word with placeholders: a number
+    where the example is a number (`{6}`, own `{n:d}`), a "quoted" string where it is quoted, a
+    .py file for `{files.py}`, one word for a name (`{red}`, own `{name:w}`), else anything."""
+    def hole(m):
+        inner = m.group(1)
+        if own:
+            kind = inner.partition(":")[2]
+            return {"d": r"-?\d+", "w": r"\w+", "Dice": dice_pattern}.get(kind, r".+")
+        if re.fullmatch(r"-?\d+", inner):
+            return r"-?\d+"
+        if inner.startswith('"'):
+            return r'"[^"]*"'
+        if inner.endswith(".py"):
+            return r"\S+\.py"
+        if re.fullmatch(r"\w+", inner):
+            return r"\w+"
+        return r".+"
+    pattern = "".join(hole(m) if m.group(1) is not None else re.escape(m.group(2))
+                      for m in re.finditer(r"\{([^{}]*)\}|([^{}]+)", part))
+    return re.fullmatch(pattern, value, re.IGNORECASE) is not None
+
+
+dice_pattern = r"\d+(?:\s*(?:\+|and|,)\s*\d+)*"
+
+
+def _render(template, words, own=False):
+    """`template` (`{red} rolls {6}`) with the line's own `words` where its placeholders line
+    up (difflib on the words): ['red', 'rolled', '6'] -> 'red rolls 6'. A placeholder the
+    line has no value for keeps its example value; an own step's `{name:w}` stays `{name}`."""
+    parts = WORD.findall(template)
+    keys = ["\0" if "{" in part else part.lower() for part in parts]
+    out = []
+    matcher = difflib.SequenceMatcher(None, keys, [w.lower() for w in words], autojunk=False)
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        mine, theirs = parts[i1:i2], words[j1:j2]
+        holes = [p for p in mine if "{" in p]
+        if tag == "replace" and len(mine) == len(theirs):  # word for word: their values, our words
+            out += [t if "{" in p and _fits(p, t, own) else p for p, t in zip(mine, theirs)]
+        elif tag == "replace" and mine == holes and len(holes) == 1 and _fits(mine[0], " ".join(theirs), own):
+            out.append(" ".join(theirs))  # one value of several words
+        else:
+            out += mine
+    if own:
+        return " ".join(re.sub(r"\{(\w*)(?::[^{}]*)?\}", r"{\1}", part) for part in out)
+    return " ".join(re.sub(r"\{([^{}]*)\}", r"\1", part) for part in out)
+
+
+def suggest(text, own=()):
+    """The closest step to `text` (a feature line no step matches) as it would be written with
+    the line's own values, or None when nothing is alike enough (SUGGEST_RATIO). Candidates: the
+    built-ins (STEPS and ALSO) and the folder's own step patterns."""
+    templates = [(s, False) for entries in STEPS.values() for s, _ in entries]
+    templates += [(s, False) for s in ALSO] + [(s, True) for s in own]
+    words = WORD.findall(text.strip())
+    best, score = None, 0.0
+    for template, mine in templates:
+        rendered = _render(template, words, mine)
+        ratio = difflib.SequenceMatcher(None, rendered.lower(), text.strip().lower()).ratio()
+        if ratio > score:
+            best, score = rendered, ratio
+    return best if score >= SUGGEST_RATIO else None
 
 
 # ---- a features folder's own steps ---------------------------------------------
