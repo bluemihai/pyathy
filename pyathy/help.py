@@ -16,10 +16,16 @@ USAGE = [
     ("pyathy {features/x.feature}", "run only that file (or folder)"),
     ("pyathy init", "create features/hello.feature to start from"),
     ("pyathy steps", "list every step you can use"),
+]
+
+# (short, long forms; what it does), each printed man-style: the flag, its explanation under it
+OPTIONS = [
     ("-q, --quiet", "only one line per scenario and the total"),
-    ("-x, --fail-fast", "stop at the first scenario that fails"),
-    ("--next-failure", "run the scenarios that failed last time, in order,\nstopping at the first that still fails"),
-    ("-h", "this help"),
+    ("-ff, --fail-fast", "stop at the first scenario that fails"),
+    ("-nf, --next-failure", "run the scenarios that failed last time, in order, stopping at the first that still fails"),
+    ("-s, --solution [{FOLDER}]", "run the features here against ./_solution/main.py, or ./FOLDER/main.py "
+                                  "(-s obj2 means _solution-obj2)"),
+    ("-h, --help", "this help"),
 ]
 
 EXAMPLE = """\
@@ -110,20 +116,6 @@ class Styler:
         """`I input {4}` -> the 4 in the placeholder colour, braces gone."""
         return re.sub(r"\{([^{}]*)\}", lambda m: self.style(PLACEHOLDER, m.group(1)), text)
 
-    def entry(self, step, explanation, column):
-        """`  <step>  <explanation>` with the explanation dim at `column`, or on the next
-        line(s) when the step reaches that far."""
-        width = len(re.sub(r"[{}]", "", step)) + 2
-        lines = explanation.splitlines()
-        first = "  " + self.marked(step)
-        if not lines:
-            return [first]
-        if width + 2 > column:
-            out = [first]
-        else:
-            out = [first + " " * (column - width) + self.style(DIM, lines.pop(0))]
-        return out + [" " * column + self.style(DIM, line) for line in lines]
-
     def stanza(self, step, explanation):
         """`  <step>` on its own line, its explanation dim on the next, indented further
         (man-page style); an explanation written over two lines is joined into one."""
@@ -141,7 +133,10 @@ class Styler:
 def help_text(styler):
     out = [INTRO, "", styler.style(BOLD, "usage:")]
     for command, explanation in USAGE:
-        out += styler.entry(command, explanation, 31)
+        out += styler.stanza(command, explanation)
+    out += ["", styler.style(BOLD, "options:")]
+    for flag, explanation in OPTIONS:
+        out += styler.stanza(flag, explanation)
     return "\n".join(out + ["", styler.gherkin(EXAMPLE), "", OUTRO])
 
 

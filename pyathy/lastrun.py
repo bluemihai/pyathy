@@ -35,12 +35,13 @@ class LastRun:
     list iff it failed; one that was collected but did not run (stopped early) keeps its place;
     one that was not even looked at (another feature file was run) is kept too."""
 
-    def __init__(self):
+    def __init__(self, folder="."):
+        self.file = os.path.join(folder, FILE)  # next to the program that ran (under -s, in _solution/)
         self.failed = self.read()  # keys, in file order
 
     def read(self):
         try:
-            with open(FILE, encoding="utf-8") as f:
+            with open(self.file, encoding="utf-8") as f:
                 return [json.dumps(k, sort_keys=True) for k in json.load(f)["failed"]]
         except (OSError, ValueError, KeyError, TypeError):
             return []
@@ -54,12 +55,12 @@ class LastRun:
             seen = set(collected)
             now += [k for k in self.failed if k not in seen]
         self.failed = now
-        if now or os.path.exists(FILE):  # a clean folder stays clean until something fails
+        if now or os.path.exists(self.file):  # a clean folder stays clean until something fails
             self.write()
 
     def write(self):
-        os.makedirs(os.path.dirname(FILE), exist_ok=True)
-        with open(FILE, "w", encoding="utf-8") as f:
+        os.makedirs(os.path.dirname(self.file), exist_ok=True)
+        with open(self.file, "w", encoding="utf-8") as f:
             json.dump({"failed": [json.loads(k) for k in self.failed]}, f, indent=1)
             f.write("\n")
 

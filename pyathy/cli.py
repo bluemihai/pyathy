@@ -194,13 +194,58 @@ def init():
     return 0
 
 
+# pyathy's own flags, short and long (-x: pytest's spelling of -ff, kept as an unlisted alias)
+FLAGS = {"-q": "quiet", "--quiet": "quiet",
+         "-ff": "fail_fast", "--fail-fast": "fail_fast", "-x": "fail_fast",
+         "-nf": "next_failure", "--next-failure": "next_failure",
+         "-s": "solution", "--solution": "solution"}
+SOLUTION = "_solution"
+
+
+def has_features(path):
+    """A .feature file, or a folder with one in it: a target, never -s's folder."""
+    if os.path.isfile(path):
+        return path.endswith(".feature")
+    return os.path.isdir(path) and any(pathlib.Path(path).rglob("*.feature"))
+
+
+def parse(args):
+    """(targets, options, flags for pytest). options: pyathy's own flags by their long name;
+    "solution" holds the folder name -s was given (`-s NAME`, `-s=NAME`, or the default)."""
+    targets, options, flags = [], {}, []
+    i = 0
+    while i < len(args):
+        arg, i = args[i], i + 1
+        name, _, value = arg.partition("=")
+        if FLAGS.get(name) == "solution":
+            if not value and i < len(args) and not args[i].startswith("-") and not has_features(args[i]):
+                value, i = args[i], i + 1
+            options["solution"] = value or SOLUTION
+        elif arg in FLAGS:
+            options[FLAGS[arg]] = True
+        elif arg.startswith("-"):
+            flags.append(arg)
+        else:
+            targets.append(arg)
+    return targets, options, flags
+
+
+def solution_folder(name):
+    """The folder -s names: ./NAME, or ./_solution-NAME for a bare suffix (`-s obj2`)."""
+    looked = [name] if name.startswith(SOLUTION) else [name, f"{SOLUTION}-{name}"]
+    for folder in looked:
+        if os.path.isdir(folder):
+            return folder
+    where = " or ".join(f"./{f}" for f in looked)
+    raise ProgramError(f"no {looked[-1]} folder here (looked for {where})")
+
+
 def run(args):
-    targets = [a for a in args if not a.startswith("-")] or ["features"]
-    quiet = any(a in ("-q", "--quiet") for a in args)
-    fail_fast = any(a in ("-x", "--fail-fast") for a in args)
-    next_failure = "--next-failure" in args
-    own = ("-q", "--quiet", "-x", "--fail-fast", "--next-failure")
-    flags = [a for a in args if a.startswith("-") and a not in own] + (["-x"] if fail_fast else [])
+    targets, options, flags = parse(args)
+    targets = targets or ["features"]
+    quiet, fail_fast = options.get("quiet", False), options.get("fail_fast", False)
+    next_failure = options.get("next_failure", False)
+    flags += ["-x"] if fail_fast else []
     files = []
     for t in targets:
         if os.path.isdir(t):
@@ -220,15 +265,20 @@ def run(args):
     if not files:
         print(f"pyathy: no .feature files in {', '.join(targets)}")
         return 2
-    os.environ.setdefault("PYATHY_APP", os.path.abspath("main.py"))
     try:
-        python, how = student_python(os.path.dirname(os.path.abspath(os.environ["PYATHY_APP"])))
+        if "solution" in options:  # the features here, against the teacher's program next door
+            os.environ["PYATHY_APP"] = os.path.abspath(os.path.join(solution_folder(options["solution"]), "main.py"))
+        os.environ.setdefault("PYATHY_APP", os.path.abspath("main.py"))
+        folder = os.path.dirname(os.path.abspath(os.environ["PYATHY_APP"]))
+        python, how = student_python(folder)
     except ProgramError as e:
         print(f"pyathy: {e}")
         return 2
+    if folder != os.getcwd():
+        print(f"Program: {os.path.relpath(os.environ['PYATHY_APP'])}")
     if how:
         print(f"Python: {python} ({how})")
-    lastrun = LastRun()
+    lastrun = LastRun(folder)  # the failures are remembered next to the program that failed
     plugins = []
     if next_failure:
         if lastrun.failed:
