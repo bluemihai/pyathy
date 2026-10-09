@@ -92,9 +92,12 @@ STEPS = {
         ("no file is written", ""),
         ('the file {"game.txt"} contains {"round 4"}', "anywhere in the file (case ignored)"),
         ('the file {"game.txt"} contains:', "these lines in a row"),
-        ("a file {SAVE_FILE_NAME} with:", 'in every file step, an unquoted ALL_CAPS name is read from\n'
-                                          'your program: SAVE_FILE_NAME = "game.txt" at the top of main.py\n'
-                                          '(or of another module; else the one file the program writes)'),
+        ("a saved game:", "these lines are in your program's save file before it starts\n"
+                          "(between two lines of three quotes)"),
+        ("there is no saved game", "the program starts without its save file"),
+        ("a saved game is written", "the program made its save file, or changed it"),
+        ("the saved game holds:", "these lines in a row in the save file"),
+        ("no saved game is left", "the save file was removed, or emptied"),
         ("the program is started again", "stop it and start it over in the same folder,\nso the files it wrote are still there"),
     ],
 }

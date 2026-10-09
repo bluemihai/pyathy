@@ -138,6 +138,30 @@ def constant(app, name):
     string a module-level `NAME = "…"` assigns in the program file, else in another module of
     the program, else the one file the program opens for writing. Read with ast (the program is
     not run), so renaming the file in the program never touches the scenario."""
+    found, written = _lookup(app, name)
+    if found is not None:
+        return found
+    short = os.path.basename(app)
+    hint = (f"; it writes several files ({', '.join(written)}), so the scenario cannot tell which one"
+            if written else "; no file opened for writing was found either")
+    raise ProgramError(f'{short} has no {name} (the scenario needs it: put {name} = "…" at the top of {short}{hint})')
+
+
+SAVE_FILE = "SAVE_FILE_NAME"  # the optional override of the file a program saves to
+
+
+def save_file(app):
+    """The file the program saves its game to, for the saved-game steps: what a SAVE_FILE_NAME
+    constant names, else the one file the program opens for writing."""
+    found, _ = _lookup(app, SAVE_FILE)
+    if found is None:
+        raise ProgramError(f"pyathy can't tell which file your program saves to: put {SAVE_FILE} = \"…\""
+                           f" at the top of {os.path.basename(app)}")
+    return found
+
+
+def _lookup(app, name):
+    """(the file name, None) when the program says it, else (None, the files it opens for writing)."""
     short = os.path.basename(app)
     if not os.path.exists(app):
         raise ProgramError(f"there is no {short} in {os.path.dirname(app)}")
@@ -149,18 +173,17 @@ def constant(app, name):
             line = ast.get_source_segment(source, found) or f"{name} = …"
             raise ProgramError(f"{short} line {found.lineno}: {name} is not a plain string, so the scenario cannot"
                                f' read the file name from it (it needs {name} = "…"):\n    {line}')
-        return text
+        return text, None
     others = _modules(os.path.dirname(app), skip=short)
     for _, other in others:
         node = _assignment(other, name)
         if node is not None and _literal(node.value) is not None:
-            return _literal(node.value)
-    written = sorted({w for _, module in [(None, tree), *others] for w in _written(module)})
+            return _literal(node.value), None
+    trees = [tree] + [other for _, other in others]
+    written = sorted({w for module in trees for w in _written(module, trees)})
     if len(written) == 1:
-        return written[0]
-    hint = (f"; it writes several files ({', '.join(written)}), so the scenario cannot tell which one"
-            if written else "; no file opened for writing was found either")
-    raise ProgramError(f'{short} has no {name} (the scenario needs it: put {name} = "…" at the top of {short}{hint})')
+        return written[0], None
+    return None, written
 
 
 def _parse(path, name):
@@ -206,10 +229,14 @@ def _assigned(tree, name):
     return found
 
 
-def _written(tree):
+def _written(tree, trees=()):
     """The file names a module opens for writing: `open("save.txt", "w")`, the name a literal or
-    a name assigned one in that module, the mode a literal starting with w or a."""
+    a name assigned one in that module, the mode a literal starting with w or a. A name that is
+    a parameter of the function around the open (`def save(filename): open(filename, "w")`) is
+    followed to the calls of that function in the program's modules (`save(SAVE_FILE)`)."""
     found = []
+    functions = {child: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                 for child in ast.walk(node)}  # each node -> the innermost function around it (walk is outer-first)
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open" and node.args):
             continue
@@ -218,9 +245,32 @@ def _written(tree):
             continue
         target = node.args[0]
         if isinstance(target, ast.Name):
-            target = _assigned(tree, target.id)
+            value = _assigned(tree, target.id)
+            if value is None and node in functions:
+                found += _passed(functions[node], target.id, trees or [tree])
+                continue
+            target = value
         if (text := _literal(target)) is not None:
             found.append(text)
+    return found
+
+
+def _passed(function, name, trees):
+    """The file names the program's calls of `function` pass for its parameter `name`."""
+    params = [a.arg for a in function.args.posonlyargs + function.args.args]
+    if name not in params:
+        return []
+    at = params.index(name) - (1 if params[0] in ("self", "cls") else 0)
+    found = []
+    for module in trees:
+        for call in ast.walk(module):
+            if not (isinstance(call, ast.Call) and function.name == getattr(call.func, "id", getattr(call.func, "attr", None))):
+                continue
+            arg = call.args[at] if 0 <= at < len(call.args) else next((k.value for k in call.keywords if k.arg == name), None)
+            if isinstance(arg, ast.Name):
+                arg = _assigned(module, arg.id)
+            if (text := _literal(arg)) is not None:
+                found.append(text)
     return found
 
 

@@ -55,7 +55,7 @@ summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of
 `-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
 first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
 the full output. Every report (and `pyathy steps`, `pyathy -h`) ends with a dim
-`pyathy 0.3.0 · <where it runs from>` line, under TOTAL and its hint, the same origin `-v`
+`pyathy 0.4.0 · <where it runs from>` line, under TOTAL and its hint, the same origin `-v`
 (`--version`) prints, so two copies of pyathy on one machine are never confused:
 the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv tool install -e`,
 or `installed: <site-packages>/pyathy`.
@@ -117,7 +117,11 @@ a terminal: the parts you replace in cyan).
 | `a file "game.txt" is written` / `no file is written` | the program made a file, or changed one |
 | `the file "game.txt" contains "round 4"` | anywhere in the file |
 | `the file "game.txt" contains:` + lines between `"""` | these lines, in a row |
-| `a file SAVE_FILE_NAME with:` | in every file step, an unquoted ALL_CAPS name is read from your program: `SAVE_FILE_NAME = "game.txt"` at the top of `main.py` (or of another module; else the one file the program writes) |
+| `a saved game:` + lines between `"""` | these lines are in your program's save file before it starts |
+| `there is no saved game` | the program starts without its save file |
+| `a saved game is written` | the program made its save file, or changed it |
+| `the saved game holds:` + lines between `"""` | these lines, in a row, in the save file |
+| `no saved game is left` | the save file was removed, or emptied |
 | `the program is started again` | stop it and start it over in the same folder, so the files it wrote are still there |
 
 ## Turns
@@ -141,54 +145,39 @@ for it and makes the die show 6, after checking that the last turn announcement 
 ## Start from a saved state
 
 A program that saves its state to a text file is easy to test from any point: dictate the
-file, start the program, play a move, and check the file (or what is printed). Each scenario
-runs in a copy of your folder, so the dictated file and whatever the program writes never
-touch your own files. For a save-then-load check in one scenario, `the program is started
-again` restarts it in that same copy, with its save file still there; the steps after it
-read the new run, and the report shows both runs.
+saved game, start the program, play a move, and check the saved game (or what is printed).
+Each scenario runs in a copy of your folder, so the dictated file and whatever the program
+writes never touch your own files. For a save-then-load check in one scenario, `the program
+is started again` restarts it in that same copy, with its saved game still there; the steps
+after it read the new run, and the report shows both runs.
 
 ```gherkin
 Feature: Counter
 
   Scenario: it continues from the saved count and saves the new one
-    Given a file "count.txt" with:
+    Given a saved game:
       """
       3
       """
     When I start the program
     Then "Count: 3" is printed
     When I input enter, q
-    Then the file "count.txt" contains:
+    Then the saved game holds:
       """
       4
       """
 
   Scenario: save, start again, it continued
+    Given there is no saved game
     When I input enter, enter, q
-    Then a file "count.txt" is written
+    Then a saved game is written
     When the program is started again
     Then "Count: 2" is printed
 ```
 
-Name the file by a constant of your program instead, and the scenario survives a rename: with
-`SAVE_FILE_NAME = "count.txt"` at the top of `main.py`, write the name unquoted in any file step.
-pyathy reads the constant from your program (it does not run it), so changing it to
-`"state.txt"` later changes the scenario too.
-
-```gherkin
-  Scenario: it continues from the saved count (the file named by the program)
-    Given a file SAVE_FILE_NAME with:
-      """
-      3
-      """
-    When I start the program
-    Then "Count: 3" is printed
-    When I input enter, q
-    Then the file SAVE_FILE_NAME contains:
-      """
-      4
-      """
-```
+The scenario never names the file: pyathy finds it in your program (it reads the code, it does
+not run it), as the one file your program opens for writing. A program that writes several
+files says which one is the save file with `SAVE_FILE_NAME = "count.txt"` at the top of `main.py`.
 
 ## Your own steps
 

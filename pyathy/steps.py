@@ -14,7 +14,7 @@ import sys
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from .program import Program, ProgramError, constant, plain
+from .program import Program, ProgramError, constant, plain, save_file
 
 
 REGISTERED = []  # (pattern, file, parser, function) of every step, for `pyathy steps` and turn tables
@@ -463,7 +463,10 @@ def file_contains(program, name, text):
 @_re(rf'the file {NAME} contains:?')
 def file_shows(program, name, docstring):
     """These lines in a row, like `the output shows:`."""
-    name = file_name(program, name)
+    lines_in_a_row(program, file_name(program, name), docstring)
+
+
+def lines_in_a_row(program, name, docstring):
     want = [line.rstrip().lower() for line in docstring.splitlines()]
     have = [line.rstrip().lower() for line in file_text(program, name).splitlines()]
     for i in range(len(have) - len(want) + 1):
@@ -471,6 +474,53 @@ def file_shows(program, name, docstring):
             return
     shown = "\n".join(f"    | {line}" for line in docstring.splitlines())
     fail(program, f'expected the file "{name}" to contain these lines, in a row:\n{shown}')
+
+
+# ---- a saved game: the file the program saves to, found in the program -------------
+
+def saved_file(program):
+    """The name of the file the program saves its game to: what a SAVE_FILE_NAME constant
+    names, else the one file the program opens for writing (read from the code, not run)."""
+    return save_file(program.app)
+
+
+@_re(r"a saved game:?")
+def saved_game(program, docstring):
+    """These lines are in the program's save file before it starts."""
+    program.write_file(saved_file(program), docstring + "\n")
+
+
+@step("there is no saved game")
+def no_saved_game(program):
+    """The program starts without its save file, whatever playing left in the folder. A program
+    that saves nothing yet has nothing to leave out."""
+    try:
+        program.remove_file(saved_file(program))
+    except ProgramError:
+        pass
+
+
+@_re(r"the saved game holds:?")
+def saved_game_holds(program, docstring):
+    """The save file has these lines in a row, like `the file "game.txt" contains:`."""
+    lines_in_a_row(program, saved_file(program), docstring)
+
+
+@step("a saved game is written")
+def saved_game_written(program):
+    file_written(program, '"' + saved_file(program) + '"')
+
+
+@step("no saved game is left")
+def no_saved_game_left(program):
+    """The save file was removed, or emptied (so the next start is a new game)."""
+    name = saved_file(program)
+    program.settle()
+    path = os.path.join(program.workdir or "", name)
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8", errors="replace") as f:
+            if f.read().strip():
+                fail(program, f'expected the save file "{name}" to be removed (or emptied), but it still holds a game')
 
 
 @step("the program is started again")
