@@ -20,12 +20,13 @@ USAGE = [
 
 # (short, long forms; what it does), each printed man-style: the flag, its explanation under it
 OPTIONS = [
-    ("-q, --quiet", "only one line per scenario and the total"),
+    ("-q, --quiet", "only one line per scenario (a ✘ gets one reason line) and the total"),
     ("-ff, --fail-fast", "stop at the first scenario that fails"),
     ("-nf, --next-failure", "run the scenarios that failed last time, in order, stopping at the first that still fails"),
     ("-s, --solution [{FOLDER}]", "run the features here against ./_solution/main.py, or ./FOLDER/main.py "
                                   "(-s obj2 means _solution-obj2)"),
     ("-h, --help", "this help"),
+    ("-v, --version", "pyathy's version and where it runs from"),
 ]
 
 EXAMPLE = """\

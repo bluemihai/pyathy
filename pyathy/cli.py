@@ -2,10 +2,13 @@
 output instead of pytest's). The help and step texts live in help.py.
 """
 
+import json
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
+from importlib.metadata import PackageNotFoundError, distribution
 
 import pytest
 from pytest_bdd.exceptions import GherkinParseError
@@ -13,6 +16,7 @@ from pytest_bdd.feature import get_feature
 from pytest_bdd.parser import render_string
 from pytest_bdd.scenario import scenario_wrapper_template_registry
 
+from . import __version__
 from .help import Styler, colour_ok, help_text, own_steps, steps_text
 from .lastrun import LastRun, NextFailure, key
 from .program import ProgramError, student_python
@@ -35,13 +39,35 @@ scenarios({paths})
 
 
 MAX_TRANSCRIPT = 200  # lines of one scenario's run shown (its first 150, its last 50); the rest is counted
+PIPED_WIDTH = 120     # columns a -q reason line is cut to when the output is not a terminal
+
+
+def origin():
+    """Where this pyathy runs from, so two copies are never confused: the pyathy/ folder a
+    student unzipped (`python pyathy`), the repo an editable install points at, or the
+    installed package."""
+    package = pathlib.Path(__file__).resolve().parent
+    folder = package.parent
+    if (folder / "__main__.py").is_file() and (folder / "lib").is_dir():
+        return str(folder)
+    try:
+        url = json.loads(distribution("pyathy").read_text("direct_url.json") or "{}")
+        if url.get("dir_info", {}).get("editable") and url.get("url", "").startswith("file://"):
+            return f"editable: {url['url'].removeprefix('file://')}"
+    except (PackageNotFoundError, ValueError):
+        pass
+    return f"installed: {package}"
+
+
+def version_line():
+    return f"pyathy {__version__} ({origin()})"
 
 
 class Report:
     """pyathy's own output instead of pytest's. By default each scenario's run as a terminal
     would show it (prompts, typed answers, boards), then its ✔/✘ line with the reason under a
     ✘; after all scenarios a summary of the ✔/✘ lines and the TOTAL line graders read.
-    quiet: only the ✔/✘ lines and TOTAL."""
+    quiet: only the ✔/✘ lines (a ✘ with its reason's first line) and TOTAL."""
 
     def __init__(self, broken=0, quiet=False, lastrun=None, next_failure=None):
         self.errors = {}
@@ -50,6 +76,7 @@ class Report:
         self.total = broken  # each unreadable feature file counts as one failed scenario
         self.quiet = quiet
         self.colour = colour_ok()
+        self.width = shutil.get_terminal_size().columns if sys.stdout.isatty() else PIPED_WIDTH
         self.programs = {}
         self.results = []    # (feature, line) per scenario, for the summary
         self.lastrun = lastrun            # the .pyathy/last-run.json memory, rewritten at the end
@@ -80,6 +107,17 @@ class Report:
             lines = lines[:head] + [self.style(2, f"… ({more} more lines)")] + lines[head + more:]
         gutter = self.style(2, "  │ ")
         return [gutter + line for line in lines]
+
+    def reason(self, error):
+        """Why a scenario failed, indented under its ✘ line: the whole message, or under -q
+        its first non-empty line cut to the terminal's width (the rest is a run without -q)."""
+        lines = [f"      {line}" for line in error.splitlines()]
+        if not self.quiet:
+            return "\n".join(lines)
+        first = next((line for line in lines if line.strip()), "      ?")
+        if len(first) > self.width:
+            first = first[:max(self.width - 1, 1)] + "…"
+        return first
 
     def pytest_collectreport(self, report):
         if report.failed:
@@ -118,7 +156,7 @@ class Report:
         self.results.append((feature, line))
         print(line)
         if error is not None:
-            print("\n".join(f"      {line}" for line in error.splitlines()))
+            print(self.reason(error))
         order = self.next_failure.order if self.next_failure else []
         if order and nodeid == order[-1] and error is None and self.count > len(order):
             n = len(order)
@@ -154,6 +192,8 @@ class Report:
         not_run = self.count - len(self.ran - {None})
         suffix = f" (stopped at the first failure; {plural(not_run, 'scenario')} not run)" if stopped else ""
         print(f"\nTOTAL  {self.passed} of {self.total}{suffix}")
+        if self.quiet and self.passed < self.total:
+            print(self.style(2, f"run {self.command} without -q for the full output of each ✘"))
         if stopped and self.next_failure:
             order = self.next_failure.order
             left = len(order) - len([n for n in order if n in self.names and self.keys[n] in self.ran])
@@ -255,6 +295,11 @@ def run(args):
         else:
             print(f"pyathy: no such file or folder: {t}")
             return 2
+    if not files:
+        print(f"pyathy: no .feature files in {', '.join(targets)}")
+        return 2
+    styler = Styler()
+    print(styler.style(2, f"pyathy {__version__} · {origin()}"))
     good, broken = [], 0
     for path in files:
         if (problem := gherkin_problem(path)) is None:
@@ -262,9 +307,6 @@ def run(args):
         else:
             broken += 1
             print(f"✘ {os.path.relpath(path)} is not valid Gherkin\n{problem}")
-    if not files:
-        print(f"pyathy: no .feature files in {', '.join(targets)}")
-        return 2
     try:
         if "solution" in options:  # the features here, against the teacher's program next door
             os.environ["PYATHY_APP"] = os.path.abspath(os.path.join(solution_folder(options["solution"]), "main.py"))
@@ -317,7 +359,10 @@ def main():
     if args[:1] == ["init"]:
         sys.exit(init())
     if args[:1] in (["-h"], ["--help"]):
-        print(help_text(Styler()))
+        print(help_text(Styler()) + "\n\n" + version_line())
+        sys.exit(0)
+    if args[:1] in (["-v"], ["--version"]):
+        print(version_line())
         sys.exit(0)
     if args[:1] == ["steps"]:
         print(steps_text(Styler(), own_steps()))

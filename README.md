@@ -30,11 +30,12 @@ python pyathy -h     # usage and an example feature
 Options, each with a short and a long form:
 
 ```
--q,  --quiet              only one line per scenario and the total
+-q,  --quiet              only one line per scenario (a ✘ gets one reason line) and the total
 -ff, --fail-fast          stop at the first scenario that fails
 -nf, --next-failure       run the scenarios that failed last time, in order, stopping at the first that still fails
 -s,  --solution [FOLDER]  run the features here against ./_solution/main.py, or ./FOLDER/main.py (-s obj2 means _solution-obj2)
 -h,  --help               this help
+-v,  --version            pyathy's version and where it runs from
 ```
 
 `--next-failure` (as in rspec) reads the failures pyathy remembered in `.pyathy/last-run.json`
@@ -48,7 +49,12 @@ program printed (boards, trees, prompts) and what was typed (bold, on a terminal
 colour), under a `│` gutter, then its `✔`/`✘` line with the reason under a `✘`. A run
 longer than 200 lines shows its first 150 and last 50. After the last scenario comes a
 summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of m`. With
-`-q` (or `--quiet`) only the `✔`/`✘` lines, the reasons and the TOTAL line are printed.
+`-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
+first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
+the full output. Every report opens with a dim `pyathy 0.2.0 · <where it runs from>` line, the
+same origin `-v` (`--version`) prints, so two copies of pyathy on one machine are never confused:
+the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv tool install -e`,
+or `installed: <site-packages>/pyathy`.
 
 The `pyathy` folder is built from this repo with `scripts/build-folder.sh` (it lands in
 `dist/pyathy/`, with pytest-bdd inside, so nothing needs installing). You can also install

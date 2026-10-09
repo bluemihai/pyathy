@@ -1,6 +1,6 @@
 [project]
 name = "pyathy"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Python acceptance testing harness (for) you: Gherkin for command-line programs"
 requires-python = ">=3.11"
 dependencies = ["pytest-bdd>=9"]
@@ -11,3 +11,6 @@ pyathy = "pyathy.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "pyathy/__init__.py"
