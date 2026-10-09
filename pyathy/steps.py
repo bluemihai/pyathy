@@ -3,9 +3,12 @@
 Matching ignores case and trailing spaces, unless the step says "exactly".
 """
 
+import importlib.util
 import os
+import pathlib
 import re
 import shlex
+import sys
 
 import pytest
 from pytest_bdd import given, parsers, then, when
@@ -13,9 +16,13 @@ from pytest_bdd import given, parsers, then, when
 from .program import Program, ProgramError
 
 
+REGISTERED = []  # (pattern, file) of every step defined through step(), for `pyathy steps`
+
+
 def step(pattern):
     """Register one step under all three keywords."""
     parser = parsers.re(pattern)
+    REGISTERED.append((pattern, sys._getframe(1).f_code.co_filename))
 
     def register(fn):
         return given(parser, stacklevel=2)(when(parser, stacklevel=2)(then(parser, stacklevel=2)(fn)))
@@ -28,7 +35,7 @@ def values(text):
     text = text.strip()
     if re.fullmatch(r"(?:an? )?empty string|with (?:an? )?empty string|enter|nothing", text):
         return [""]
-    found = re.findall(r'"([^"]*)"|([^,]+)', text)
+    found = re.findall(r'\s*"([^"]*)"\s*|([^,]+)', text)
     return [quoted if quoted or not bare else bare.strip() for quoted, bare in found]
 
 
@@ -198,12 +205,22 @@ def file_contains(program, name, text):
 
 # ---- a features folder's own steps ---------------------------------------------
 
+def load_own_steps(path):
+    """Import one *steps.py (without writing a __pycache__ into their folder); returns the module."""
+    name = f"pyathy_own_steps_{abs(hash(str(path)))}"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    writes, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = writes
+    return module
+
+
 def pytest_collection_modifyitems(session, config, items):
     """A features folder may ship its own steps: every *steps.py next to a .feature file is
     loaded, so its steps (written with `from pyathy.steps import step`) work like built-ins."""
-    import importlib.util
-    import pathlib
-
     from pytest_bdd.scenario import scenario_wrapper_template_registry
 
     folders = set()
@@ -215,12 +232,4 @@ def pytest_collection_modifyitems(session, config, items):
         name = f"pyathy_own_steps_{abs(hash(str(path)))}"
         if config.pluginmanager.has_plugin(name):
             continue
-        spec = importlib.util.spec_from_file_location(name, path)
-        module = importlib.util.module_from_spec(spec)
-        import sys
-        writes, sys.dont_write_bytecode = sys.dont_write_bytecode, True  # no __pycache__ in their folder
-        try:
-            spec.loader.exec_module(module)
-        finally:
-            sys.dont_write_bytecode = writes
-        config.pluginmanager.register(module, name)
+        config.pluginmanager.register(load_own_steps(path), name)

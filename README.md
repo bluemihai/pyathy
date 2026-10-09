@@ -24,7 +24,8 @@ Then, from `my-game/`:
 ```
 python pyathy        # run every features/*.feature against main.py
 python pyathy -q     # quiet: one line per scenario and the total
-python pyathy -h     # how to write a feature, and every step you can use
+python pyathy steps  # every step you can use (plus your own, from features/*_steps.py)
+python pyathy -h     # usage and an example feature
 ```
 
 By default each scenario's run is shown as a terminal would have shown it: what the
@@ -56,7 +57,8 @@ Feature: Tic Tac Toe
 ## Built-in steps
 
 Each works after `Given`, `When`, `Then`, `And` or `But`. Text checks ignore case and
-trailing spaces.
+trailing spaces. `python pyathy steps` prints this list (colour-coded on a terminal:
+the parts you replace in cyan).
 
 | Step | What it does |
 |---|---|

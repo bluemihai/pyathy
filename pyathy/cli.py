@@ -1,47 +1,6 @@
-"""pyathy: test your Python program with scenarios written in plain English.
-
-usage:
-  pyathy                 run every features/*.feature against main.py here,
-                         showing each scenario's run (what it printed, what was typed)
-  pyathy -q              quiet: only one line per scenario and the total
-  pyathy features/x.feature   run only that file (or folder)
-  pyathy init            create features/hello.feature to start from
-  pyathy -h              this help
-
-A feature file (features/tictactoe.feature):
-
-  Feature: Tic Tac Toe
-
-    Scenario: X wins with the top row
-      When I input 1, 4, 2, 5, 3
-      Then "Player X wins!" is printed
-      And the program ends
-
-Steps you can use (after Given, When, Then or And):
-  the program files.py           run files.py instead of main.py
-  I run the program with photos/ --all
-                                 start it with these command-line arguments
-                                 (quote one with spaces: "my file.txt")
-  the program may take 30 seconds
-                                 wait this long for a slow program (default 10)
-  I input 4                      type 4 when the program asks
-  I input 1, 4, 2                several answers, one per question
-  I answer with an empty string  just press enter
-  I roll 6                       the next die shows 6
-  I roll 4 and 6                 two dice
-  "Hello World" is printed       anywhere in the output (case ignored)
-  "ERROR" is printed 3 times
-  "Congratulations" is not printed
-  the output starts with "Welcome"
-  the output shows:              these lines in a row (put them
-                                 between two lines of three quotes)
-  the program asks "Player X, choose a square (1-9):"
-  the program ends
-  the program is still running
-
-Each scenario runs your program from the start, in a copy of this folder.
-A folder with a Poetry pyproject.toml runs on its Poetry environment (run
-poetry install first); else a .venv in the folder; else pyathy's own Python."""
+"""pyathy's command line: run the features, init, steps, -h; and the Report (pyathy's own
+output instead of pytest's). The help and step texts live in help.py.
+"""
 
 import os
 import pathlib
@@ -54,6 +13,7 @@ from pytest_bdd.feature import get_feature
 from pytest_bdd.parser import render_string
 from pytest_bdd.scenario import scenario_wrapper_template_registry
 
+from .help import Styler, colour_ok, help_text, own_steps, steps_text
 from .program import ProgramError, student_python
 
 HELLO_FEATURE = '''Feature: Hello World
@@ -74,13 +34,6 @@ scenarios({paths})
 
 
 MAX_TRANSCRIPT = 200  # lines of one scenario's run shown (its first 150, its last 50); the rest is counted
-
-
-def colour_ok():
-    """ANSI styles only on a terminal that shows them (and never with NO_COLOR set)."""
-    if os.environ.get("NO_COLOR") or not sys.stdout.isatty():
-        return False
-    return os.name != "nt" or bool(os.environ.get("WT_SESSION") or os.environ.get("TERM"))
 
 
 class Report:
@@ -253,7 +206,10 @@ def main():
     if args[:1] == ["init"]:
         sys.exit(init())
     if args[:1] in (["-h"], ["--help"]):
-        print(__doc__)
+        print(help_text(Styler()))
+        sys.exit(0)
+    if args[:1] == ["steps"]:
+        print(steps_text(Styler(), own_steps()))
         sys.exit(0)
     sys.exit(run(args))
 
