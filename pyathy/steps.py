@@ -16,16 +16,36 @@ from pytest_bdd import given, parsers, then, when
 from .program import Program, ProgramError, constant
 
 
-REGISTERED = []  # (pattern, file) of every step defined through step(), for `pyathy steps`
+REGISTERED = []  # (pattern, file, parser, function) of every step, for `pyathy steps` and turn tables
 
 
-def step(pattern):
-    """Register one step under all three keywords."""
-    parser = parsers.re(pattern)
-    REGISTERED.append((pattern, sys._getframe(1).f_code.co_filename))
+def dice(text):
+    """'6' -> [6];  '4+6' -> [4, 6];  '4 and 6' -> [4, 6]."""
+    return [int(f) for f in re.findall(r"\d+", text)]
 
+
+dice.pattern = r"\d+(?:\s*(?:\+|and|,)\s*\d+)*"
+TYPES = {"Dice": dice}
+
+
+def step(*patterns):
+    """Register one step, written as a Cucumber-style pattern: `"{name} rolls {n:d}"` ({n:d} a
+    whole number, {name:w} one word, {text} anything). Several patterns share one function;
+    a field a pattern leaves out gets the function's default."""
+    return _register([(p, parsers.cfparse(p, extra_types=TYPES)) for p in patterns], sys._getframe(1).f_code.co_filename)
+
+
+def _re(*patterns):
+    """A built-in whose pattern is a regular expression (an optional part, an alternative)."""
+    return _register([(p, parsers.re(p)) for p in patterns], sys._getframe(1).f_code.co_filename)
+
+
+def _register(parsed, file):
     def register(fn):
-        return given(parser, stacklevel=2)(when(parser, stacklevel=2)(then(parser, stacklevel=2)(fn)))
+        for pattern, parser in parsed:
+            REGISTERED.append((pattern, file, parser, fn))
+            given(parser, stacklevel=2)(when(parser, stacklevel=2)(then(parser, stacklevel=2)(fn)))
+        return fn
 
     return register
 
@@ -54,17 +74,17 @@ def program(request):
     p.close()
 
 
-@step(r"the program (?P<name>[\w./-]+\.py)")
+@_re(r"the program (?P<name>[\w./-]+\.py)")
 def the_program(program, name):
     program.app = os.path.join(os.path.dirname(program.app), name)
 
 
-@step(r"I start the program")
+@step("I start the program")
 def start(program):
     program.settle()
 
 
-@step(r"I run the program(?: with (?P<args>.+))?")
+@_re(r"I run the program(?: with (?P<args>.+))?")
 def run_with(program, args):
     """`I run the program with photos/ --all`: starts it like `python main.py photos/ --all`.
     Quote an argument with spaces in it: `with "my file.txt"`."""
@@ -78,7 +98,7 @@ def run_with(program, args):
     program.settle()
 
 
-@step(r"the program may take (?P<seconds>\d+(?:\.\d+)?) seconds?")
+@_re(r"the program may take (?P<seconds>\d+(?:\.\d+)?) seconds?")
 def may_take(program, seconds):
     """A slow program: wait up to this long for it to print or ask something (default 10)."""
     program.timeout = float(seconds)
@@ -87,22 +107,159 @@ def may_take(program, seconds):
 
 # ---- typing --------------------------------------------------------------------
 
-@step(r"I (?:input|answer|type|enter) (?P<text>.+)")
+@_re(r"I (?:input|answer|type|enter) (?P<text>.+)")
 def type_(program, text):
-    program.type(*values(text))
+    typed = values(text)
+    program.players += [t for t in typed if t.isalpha() and not known(program, t)]
+    program.type(*typed)
 
 
 # ---- randomness ----------------------------------------------------------------
 
-@step(r"I roll (?P<faces>-?\d+(?:\s*(?:,|\+|and)\s*-?\d+)*)")
+@_re(r"I roll (?P<faces>-?\d+(?:\s*(?:,|\+|and)\s*-?\d+)*)")
 def roll(program, faces):
     program.roll(*(int(f) for f in re.findall(r"-?\d+", faces)))
 
 
-@step(r'the random (?:choice|pick|number) is (?P<text>.+)')
+@_re(r'the random (?:choice|pick|number) is (?P<text>.+)')
 def choose(program, text):
     for v in values(text):
         program.choose(int(v) if re.fullmatch(r"-?\d+", v) else v)
+
+
+# ---- turns ----------------------------------------------------------------------
+
+def known(program, name):
+    return any(p.lower() == name.lower() for p in program.players)
+
+
+def announced(line, players):
+    """The player a line announces, or None: it names exactly one of them and has no digits
+    ("Player red:", "***** Timothy's turn *****"). Boards and player lists carry numbers."""
+    if re.search(r"\d", line):
+        return None
+    named = [p for p in players if re.search(rf"\b{re.escape(p)}\b", line, re.IGNORECASE)]
+    return named[0] if len(named) == 1 else None
+
+
+def announcements(program, since=0):
+    """[(line, player)] of every turn announcement in the output from `since` on."""
+    found = []
+    for line in program.output[since:].splitlines():
+        player = announced(line, program.players)
+        if player:
+            found.append((line.strip(), player))
+    return found
+
+
+def check_turn(program, name):
+    """It is this player's turn: the last announcement names them."""
+    last = announcements(program)[-1:]
+    if not last:
+        fail(program, f"expected it to be {name}'s turn, but no line announced anyone's turn (one naming the"
+                      f" player and no other, without digits, like 'Player {name}:')")
+    if last[0][1].lower() != name.lower():
+        fail(program, f"expected it to be {name}'s turn; the last announcement was {last[0][0]!r}")
+
+
+def take_turn(program, name, dice):
+    """Enter (if the program is waiting for it), then the dice show these faces, after checking
+    that it is this player's turn."""
+    program.settle()
+    if not known(program, name):
+        program.players.append(name)
+    if program.state != "waiting":
+        fail(program, f"expected {name} to roll, but it cannot:")
+    check_turn(program, name)
+    program.turn(*dice)
+
+
+def asked_after_roll(program):
+    """The program is waiting for an answer to a question of this turn (no turn announced since the roll)."""
+    program.settle()
+    return program.state == "waiting" and program.request[0] == "input" and not announcements(program, program.turn_start)
+
+
+def answer_after_roll(program, name, answer):
+    if not asked_after_roll(program):
+        since = announcements(program, program.turn_start)
+        went = f"went on to {since[-1][1]}'s turn" if since else "asked nothing"
+        fail(program, f"{name} rolled and should have been asked something (to answer {answer!r}), but the program {went}")
+    program.type(answer)
+
+
+@step("the players are {names}")
+def players(program, names):
+    """`the players are red and green`: the names a turn announcement may use (otherwise:
+    the names the scenario typed or rolled for)."""
+    program.players += [n for n in re.split(r", | and |,", names) if n.strip() and not known(program, n.strip())]
+
+
+@step("{name:w} rolls {dice:Dice}")
+def turn(program, name, dice):
+    take_turn(program, name, dice)
+
+
+@step("{name:w} rolls {dice:Dice} and picks {answer}", "{name:w} rolls {dice:Dice} and answers {answer}")
+def turn_and_answer(program, name, dice, answer):
+    take_turn(program, name, dice)
+    answer_after_roll(program, name, answer)
+
+
+@step("these turns are played {n:d} times:", "these turns are played {n:d} time:")
+def turns(program, n, datatable):
+    """A table with one step per row (`| red rolls 5 |`), run in order, this many times."""
+    for _ in range(n):
+        for row in datatable:
+            run_step(program, row[0].strip())
+
+
+def run_step(program, text):
+    """Run one step by its text, as a table row: the last registered step that matches it
+    (a features folder's own steps come after the built-ins, so theirs win)."""
+    for pattern, _, parser, fn in reversed(REGISTERED):
+        if parser.is_matching(text):
+            return fn(program, **parser.parse_arguments(text))
+    raise ProgramError(f"no step matches the table row {text!r}")
+
+
+@step("{name:w}'s turn is announced", "it is {name:w}'s turn")
+def turn_announced(program, name):
+    program.settle()
+    if not known(program, name):
+        program.players.append(name)
+    if not any(p.lower() == name.lower() for _, p in announcements(program)):
+        fail(program, f"expected a line announcing {name}'s turn: one naming {name} (and no other player),"
+                      f" without digits, like 'Player {name}:'")
+
+
+MOVE = re.compile(r"->|→|=>|\bto\b")
+
+
+def moves(text):
+    """Every move a text reports: a line with exactly two numbers, 'to' or an arrow between them."""
+    found = []
+    for line in text.splitlines():
+        numbers = list(re.finditer(r"\b\d+\b", line))
+        if len(numbers) == 2 and MOVE.search(line, numbers[0].end(), numbers[1].start()):
+            found.append((int(numbers[0].group()), int(numbers[1].group())))
+    return found
+
+
+@step("a pawn moves from {a:d} to {b:d}", "{name:w} moves from {a:d} to {b:d}")
+def moved(program, a, b, name="a pawn"):
+    program.settle()
+    if (a, b) not in moves(program.turn_output()):
+        fail(program, f"expected a line of this turn to say {name} moves from {a} to {b}: the two squares in"
+                      f" that order, like 'Pawn moving from {a} to {b}.'")
+
+
+@step("nothing moves")
+def nothing_moved(program):
+    program.settle()
+    found = moves(program.turn_output())
+    if found:
+        fail(program, f"expected nothing to move this turn, but a line says {found[0][0]} to {found[0][1]}")
 
 
 # ---- checking ------------------------------------------------------------------
@@ -115,7 +272,7 @@ def fail(program, message):
     raise ProgramError(f"{message}\n{where}\n{program.tail()}")
 
 
-@step(r'(?P<exact>exactly )?"(?P<text>[^"]*)" is printed(?: (?P<n>\d+) times?)?')
+@_re(r'(?P<exact>exactly )?"(?P<text>[^"]*)" is printed(?: (?P<n>\d+) times?)?')
 def printed(program, exact, text, n):
     out = program.settle()
     haystack, needle = (out, text) if exact else (norm(out), norm(text))
@@ -126,19 +283,19 @@ def printed(program, exact, text, n):
         fail(program, f'expected "{text}" to be printed {n} times, but it was printed {count} times')
 
 
-@step(r'"(?P<text>[^"]*)" is not printed')
+@_re(r'"(?P<text>[^"]*)" is not printed')
 def not_printed(program, text):
     if norm(text) in norm(program.settle()):
         fail(program, f'expected "{text}" NOT to be printed, but it was')
 
 
-@step(r'the output starts with "(?P<text>[^"]*)"')
+@_re(r'the output starts with "(?P<text>[^"]*)"')
 def starts_with(program, text):
     if not norm(program.settle()).startswith(norm(text)):
         fail(program, f'expected the output to start with "{text}"')
 
 
-@step(r"the output shows:?")
+@_re(r"the output shows:?")
 def shows(program, docstring):
     want = [line.rstrip().lower() for line in docstring.splitlines()]
     have = [line.rstrip().lower() for line in program.settle().splitlines()]
@@ -149,7 +306,7 @@ def shows(program, docstring):
     fail(program, f"expected these lines, in a row:\n{shown}")
 
 
-@step(r'the program asks "(?P<text>[^"]*)"')
+@_re(r'the program asks "(?P<text>[^"]*)"')
 def asks(program, text):
     program.settle()
     if program.request is None or program.request[0] != "input":
@@ -159,7 +316,37 @@ def asks(program, text):
         fail(program, f'expected the program to ask "{text}"')
 
 
-@step(r"the program ends")
+@step('"{text}" is refused with a message')
+def refused(program, text):
+    """After typing it, a message was printed and the same question was asked again."""
+    out = program.settle()
+    typed = program.typed
+    tries = [k for k, (start, end) in enumerate(typed) if out[start:end] == text]
+    if not tries:
+        fail(program, f"{text!r} was never typed")
+    for k in tries:
+        start, end = typed[k]
+        question = question_before(out, start)
+        after = out[end:typed[k + 1][0] if k + 1 < len(typed) else len(out)]
+        asked_again = bool(question) and question in after
+        message = any(line.strip() and line.strip() != question for line in after.splitlines())
+        if asked_again and message:
+            return
+    if not asked_again:
+        fail(program, f"after {text!r} was typed, the same question should be asked again ({question!r})")
+    fail(program, f"after {text!r} was typed, a message should be printed before the question is asked again")
+
+
+def question_before(out, at):
+    """The prompt before an answer typed at `at`: the line it was typed on, else the line above."""
+    line_start = out.rfind("\n", 0, at) + 1
+    question = out[line_start:at].strip()
+    if not question and line_start > 0:
+        question = out[out.rfind("\n", 0, line_start - 1) + 1:line_start - 1].strip()
+    return question
+
+
+@step("the program ends")
 def ends(program):
     program.settle()
     if program.state == "crashed":
@@ -168,7 +355,7 @@ def ends(program):
         fail(program, "expected the program to end")
 
 
-@step(r"the program is still running")
+@step("the program is still running")
 def running(program):
     program.settle()
     if program.state != "waiting":
@@ -202,23 +389,34 @@ NAME = r'(?P<name>"[^"]+"|[A-Z][A-Z0-9_]*)'  # "game.txt", or a constant of the 
 
 def file_name(program, name):
     """The file a Files step names: a quoted literal, or an ALL_CAPS constant read from the
-    program file (`SAVE_FILE_NAME = "game.txt"` at its top level), so the scenario follows the
-    program when the file is renamed there."""
+    program (`SAVE_FILE_NAME = "game.txt"` at the top of main.py or another module, else the
+    one file the program writes), so the scenario follows the program when the file is renamed."""
     if name.startswith('"'):
         return name[1:-1]
     return constant(program.app, name)
 
 
-@step(rf'a file {NAME} containing "(?P<text>[^"]*)"')
+@_re(rf'a file {NAME} containing "(?P<text>[^"]*)"')
 def file_with_line(program, name, text):
     """A one-line file in the program's folder before it starts (written into the copy)."""
     program.write_file(file_name(program, name), text + "\n")
 
 
-@step(rf'a file {NAME} with:?')
+@_re(rf'a file {NAME} with:?')
 def file_with(program, name, docstring):
     """The same with several lines, between two lines of three quotes."""
     program.write_file(file_name(program, name), docstring + "\n")
+
+
+@step("there is no file {name}")
+def no_file(program, name):
+    """The program starts without this file, whatever is in the folder (a saved game from
+    playing, say). A constant the program does not have yet names no file: nothing to leave out."""
+    try:
+        program.remove_file(file_name(program, name))
+    except ProgramError:
+        if name.startswith('"'):
+            raise
 
 
 def file_text(program, name):
@@ -230,7 +428,7 @@ def file_text(program, name):
         return f.read()
 
 
-@step(rf'a file {NAME} is written')
+@_re(rf'a file {NAME} is written')
 def file_written(program, name):
     name = file_name(program, name)
     program.settle()
@@ -241,7 +439,7 @@ def file_written(program, name):
              f"{_wrote(program)}")
 
 
-@step(r"no file is written")
+@step("no file is written")
 def no_file_written(program):
     program.settle()
     if program.changed_files():
@@ -253,14 +451,14 @@ def _wrote(program):
     return f"; it wrote: {', '.join(written)}" if written else "; it wrote no file"
 
 
-@step(rf'the file {NAME} contains "(?P<text>[^"]*)"')
+@_re(rf'the file {NAME} contains "(?P<text>[^"]*)"')
 def file_contains(program, name, text):
     name = file_name(program, name)
     if norm(text) not in norm(file_text(program, name)):
         fail(program, f'expected the file "{name}" to contain "{text}"')
 
 
-@step(rf'the file {NAME} contains:?')
+@_re(rf'the file {NAME} contains:?')
 def file_shows(program, name, docstring):
     """These lines in a row, like `the output shows:`."""
     name = file_name(program, name)
@@ -273,7 +471,7 @@ def file_shows(program, name, docstring):
     fail(program, f'expected the file "{name}" to contain these lines, in a row:\n{shown}')
 
 
-@step(r"the program is started again")
+@step("the program is started again")
 def started_again(program):
     """Stop the program and start it again in the same folder, with the files it wrote still
     there. The steps after this one read the new run; the report shows both."""

@@ -1,13 +1,14 @@
 Feature: Mini Monopoly
   The board: Start, Old Road ($60), Mill Lane ($60), Tax Office, Station ($200),
   Park Street ($100), Free Parking, Harbour ($120). Everyone starts with $1500.
-  The steps "Ann rolls 3+4 and buys", "Ann has $1460" and "Ann owns Harbour" come from
+  "Ann rolls 3+4 and answers y" is a built-in turn step: enter, the dice, and y to the buy
+  question. "Ann and Bob play 1 round", "Ann has $1460" and "Ann owns Harbour" come from
   monopoly_steps.py, next to this file.
 
   Scenario: buying a street
     Given Ann and Bob play 1 round
-    When Ann rolls 1+1 and buys
-    And Bob rolls 3+4 and doesn't buy
+    When Ann rolls 1+1 and answers y
+    And Bob rolls 3+4 and answers n
     Then "Ann buys Mill Lane." is printed
     And Ann has $1440
     And Ann owns Mill Lane
@@ -16,7 +17,7 @@ Feature: Mini Monopoly
 
   Scenario: landing on someone else's street costs rent
     Given Ann and Bob play 1 round
-    When Ann rolls 1+1 and buys
+    When Ann rolls 1+1 and answers y
     And Bob rolls 1+1
     Then "Bob pays $6 rent to Ann." is printed
     And Bob has $1494
@@ -24,9 +25,9 @@ Feature: Mini Monopoly
 
   Scenario: passing Start pays $200
     Given Ann and Bob play 2 rounds
-    When Ann rolls 3+4 and doesn't buy
-    And Bob rolls 2+2 and doesn't buy
-    And Ann rolls 1+1 and doesn't buy
+    When Ann rolls 3+4 and answers n
+    And Bob rolls 2+2 and answers n
+    And Ann rolls 1+1 and answers n
     Then "Ann passes Start and collects $200." is printed
     And Ann has $1700
 
@@ -45,7 +46,7 @@ Feature: Mini Monopoly
 
   Scenario: the richest player wins
     Given Ann and Bob play 1 round
-    When Ann rolls 2+2 and buys
+    When Ann rolls 2+2 and answers y
     And Bob rolls 1+2
     Then the output shows:
       """

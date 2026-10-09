@@ -101,32 +101,83 @@ def student_python(folder):
 
 
 def constant(app, name):
-    """The string a module-level `NAME = "…"` in the program file assigns, read with ast (the
-    program is not run). A scenario names a file by such a constant (`a file SAVE_FILE_NAME
-    with:`), so renaming the file in the program never touches the scenario."""
+    """The file a scenario names by an ALL_CAPS constant (`a file SAVE_FILE_NAME with:`): the
+    string a module-level `NAME = "…"` assigns in the program file, else in another module of
+    the program, else the one file the program opens for writing. Read with ast (the program is
+    not run), so renaming the file in the program never touches the scenario."""
     short = os.path.basename(app)
     if not os.path.exists(app):
         raise ProgramError(f"there is no {short} in {os.path.dirname(app)}")
-    with open(app, encoding="utf-8", errors="replace") as f:
+    source, tree = _parse(app, name)
+    found = _assignment(tree, name)
+    if found is not None:
+        text = _literal(found.value)
+        if text is None:
+            line = ast.get_source_segment(source, found) or f"{name} = …"
+            raise ProgramError(f"{short} line {found.lineno}: {name} is not a plain string, so the scenario cannot"
+                               f' read the file name from it (it needs {name} = "…"):\n    {line}')
+        return text
+    others = _modules(os.path.dirname(app), skip=short)
+    for _, other in others:
+        node = _assignment(other, name)
+        if node is not None and _literal(node.value) is not None:
+            return _literal(node.value)
+    written = sorted({w for _, module in [(None, tree), *others] for w in _written(module)})
+    if len(written) == 1:
+        return written[0]
+    hint = (f"; it writes several files ({', '.join(written)}), so the scenario cannot tell which one"
+            if written else "; no file opened for writing was found either")
+    raise ProgramError(f'{short} has no {name} (the scenario needs it: put {name} = "…" at the top of {short}{hint})')
+
+
+def _parse(path, name):
+    with open(path, encoding="utf-8", errors="replace") as f:
         source = f.read()
     try:
-        tree = ast.parse(source, filename=short)
+        return source, ast.parse(source, filename=os.path.basename(path))
     except SyntaxError as e:
-        raise ProgramError(f"{short} has a syntax error on line {e.lineno}, so {name} could not be read:"
-                           f" {e.msg}") from None
+        raise ProgramError(f"{os.path.basename(path)} has a syntax error on line {e.lineno}, so {name} could not"
+                           f" be read: {e.msg}") from None
+
+
+def _modules(folder, skip):
+    """(path, tree) of the other top-level .py files of the program; one that does not parse is left out."""
+    found = []
+    for entry in sorted(os.listdir(folder)):
+        if entry.endswith(".py") and entry != skip and not entry.startswith("."):
+            try:
+                found.append((entry, _parse(os.path.join(folder, entry), "")[1]))
+            except ProgramError:
+                pass
+    return found
+
+
+def _assignment(tree, name):
+    """The last top-level `name = …` in the module, or None."""
     found = None
     for node in tree.body:
         targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         if any(isinstance(t, ast.Name) and t.id == name for t in targets) and getattr(node, "value", None) is not None:
             found = node
-    if found is None:
-        raise ProgramError(f'{short} has no {name} (the scenario needs it: put {name} = "…" at the top of {short})')
-    text = _literal(found.value)
-    if text is None:
-        line = ast.get_source_segment(source, found) or f"{name} = …"
-        raise ProgramError(f"{short} line {found.lineno}: {name} is not a plain string, so the scenario cannot"
-                           f' read the file name from it (it needs {name} = "…"):\n    {line}')
-    return text
+    return found
+
+
+def _written(tree):
+    """The file names a module opens for writing: `open("save.txt", "w")`, the name a literal or
+    a constant of that module, the mode a literal starting with w or a."""
+    found = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open" and node.args):
+            continue
+        mode = node.args[1] if len(node.args) > 1 else next((k.value for k in node.keywords if k.arg == "mode"), None)
+        if not (isinstance(mode, ast.Constant) and isinstance(mode.value, str) and mode.value[:1] in ("w", "a")):
+            continue
+        target = node.args[0]
+        if isinstance(target, ast.Name):
+            target = getattr(_assignment(tree, target.id), "value", None)
+        if (text := _literal(target)) is not None:
+            found.append(text)
+    return found
 
 
 def _literal(node):
@@ -159,10 +210,13 @@ class Program:
         self.proc = None
         self.workdir = None
         self.files = []           # (name, text) to write into the copy before the first start
+        self.removed = []         # names to leave out of the copy ("there is no file …")
         self.snapshot = None      # {relative path: digest} of the copy's files at the first start
         self.runs = []            # (output, typed) of each earlier run, after "started again"
-        # A features folder's own steps may answer requests themselves (a whole Monopoly
-        # turn, say): called with each request first; it returns a reply, or None for the queues.
+        self.players = []         # the names a turn announcement may use (typed, declared or rolled)
+        self.turn_start = None    # where in output the last roll was made: "this turn" starts there
+        # A features folder's own steps may answer a request themselves (a board file's name,
+        # say): called with each request first; it returns a reply, or None for the queues.
         self.answerer = None
 
     # Everything printed (and echoed) so far. Kept as a list of pieces so a program that
@@ -188,12 +242,31 @@ class Program:
         self.advance()
 
     def roll(self, *faces):
+        self.turn_start = self._size
         self.dice.extend(faces)
         self.advance()
 
-    def choose(self, value):
-        self.values.append(value)
+    def turn(self, *faces):
+        """One turn: enter (if the program is waiting for it), then the dice show these faces."""
+        self.turn_start = self._size
+        self.dice.extend(faces)
+        if self.request is not None and self.request[0] == "input":
+            self.inputs.append("")
         self.advance()
+
+    def choose(self, value):
+        """The next random pick (not a die) returns this value."""
+        self.values.append(("value", value))
+        self.advance()
+
+    def choose_option(self, number):
+        """The next random pick (not a die) returns the n-th of the options, counted from 1."""
+        self.values.append(("index", number - 1))
+        self.advance()
+
+    def turn_output(self):
+        """What the program printed since the last roll (everything, before any roll)."""
+        return self.output[self.turn_start or 0:]
 
     def settle(self):
         self.advance()
@@ -209,6 +282,16 @@ class Program:
         os.makedirs(os.path.dirname(path) or self.workdir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(text)
+
+    def remove_file(self, name):
+        """A file the program starts without, whatever is in the folder: left out of the copy."""
+        if self.workdir is None:
+            self.removed.append(name)
+            return
+        path = os.path.join(self.workdir, name)
+        if os.path.isfile(path):
+            os.chmod(path, 0o644)
+            os.remove(path)
 
     def changed_files(self):
         """The files the program wrote: new since the first start, or with other contents."""
@@ -245,7 +328,7 @@ class Program:
                                ' start the program first (an input, a roll, a check)')
         self.stop()
         self.runs.append((self.output, self.typed))
-        self.output, self.typed = "", []
+        self.output, self.typed, self.turn_start = "", [], None
         self.state, self.request, self.exit_code, self.crash = "new", None, None, None
         self.advance()
 
@@ -260,6 +343,8 @@ class Program:
             self.workdir = tempfile.mkdtemp(prefix="pyathy-work-")
             shutil.copytree(os.path.dirname(self.app), self.workdir, dirs_exist_ok=True, ignore=skip,
                             ignore_dangling_symlinks=True)
+            for name in self.removed:
+                self.remove_file(name)
             for name, text in self.files:
                 self.write_file(name, text)
             self.snapshot = _digests(self.workdir)
@@ -339,17 +424,15 @@ class Program:
             self._print(text + "\n")  # echo, as a terminal shows it
             return ("text", text)
         _, description, is_die, menu, kind = request
-        if is_die:
-            if not self.dice:
-                return None
+        if is_die and self.dice:
             face = self.dice.popleft()
             if isinstance(menu, range) and face not in menu:
                 raise ProgramError(f"rolled {face}, but the program's die ({description}) "
                                    f"goes from {menu.start} to {menu.stop - 1}")
             return ("value", face)
-        if self.values:
-            return ("value", self.values.popleft())
-        return ("first",)
+        if self.values:  # a scripted pick answers any random call, even a six-option one
+            return self.values.popleft()
+        return None if is_die else ("first",)
 
     # ---- for messages --------------------------------------------------------
 

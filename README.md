@@ -54,7 +54,7 @@ longer than 200 lines shows its first 150 and last 50. After the last scenario c
 summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of m`. With
 `-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
 first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
-the full output. Every report opens with a dim `pyathy 0.2.0 · <where it runs from>` line, the
+the full output. Every report opens with a dim `pyathy 0.3.0 · <where it runs from>` line, the
 same origin `-v` (`--version`) prints, so two copies of pyathy on one machine are never confused:
 the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv tool install -e`,
 or `installed: <site-packages>/pyathy`.
@@ -94,20 +94,47 @@ the parts you replace in cyan).
 | `I input enter` | just press enter |
 | `I roll 6` / `I roll 3 and 4` | the next dice show these faces |
 | `the random choice is red` | the next random pick returns this value |
+| `red rolls 6` / `Ann rolls 4+6` | `I input enter` (if the program is waiting for it) then `I roll 6`, after checking it is red's turn: the last line announcing a turn names red and no other player, without digits (`Player red:`) |
+| `red rolls 3 and picks 2` / `… and answers 2` | the same, then types 2 at the question that follows |
+| `these turns are played 3 times:` + a table | one step per row (`\| red rolls 5 \|`), run in order, that many times |
+| `the players are red and green` | the names a turn announcement may use (otherwise: the names typed or rolled for so far) |
+| `red's turn is announced` / `it is red's turn` | a line names red and no other player, without digits |
+| `a pawn moves from 0 to 3` / `red moves from 0 to 3` | a line of this turn (since the last roll) has these two numbers, `to` or an arrow between them |
+| `nothing moves` | no such line this turn |
 | `"Hello" is printed` | somewhere in the output |
 | `"Error" is printed 3 times` | exactly that many times |
 | `"Game over" is not printed` | nowhere in the output |
 | `the output starts with "Welcome"` | the very first output |
 | `the output shows:` + lines between `"""` | these lines, in a row |
 | `the program asks "Your name?"` | it is now waiting for input after that question |
+| `"orange" is refused with a message` | after typing it, a message was printed and the same question was asked again |
 | `the program ends` / `the program is still running` | |
 | `a file "game.txt" containing "round 3"` | put this one-line file in the folder before the program starts |
 | `a file "game.txt" with:` + lines between `"""` | the same, several lines |
+| `there is no file "game.txt"` | the program starts without it, whatever is in your folder (a saved game from playing, say) |
 | `a file "game.txt" is written` / `no file is written` | the program made a file, or changed one |
 | `the file "game.txt" contains "round 4"` | anywhere in the file |
 | `the file "game.txt" contains:` + lines between `"""` | these lines, in a row |
-| `a file SAVE_FILE_NAME with:` | in every file step, an unquoted ALL_CAPS name is read from your program: `SAVE_FILE_NAME = "game.txt"` at its top |
+| `a file SAVE_FILE_NAME with:` | in every file step, an unquoted ALL_CAPS name is read from your program: `SAVE_FILE_NAME = "game.txt"` at the top of `main.py` (or of another module; else the one file the program writes) |
 | `the program is started again` | stop it and start it over in the same folder, so the files it wrote are still there |
+
+## Turns
+
+A turn-based game reads as a game: `red rolls 6` presses enter if the program is waiting
+for it and makes the die show 6, after checking that the last turn announcement names red
+(a line naming red and no other player, without digits, like `Player red:`). The checks
+`a pawn moves from 0 to 3` and `nothing moves` read what was printed since that roll.
+
+```gherkin
+  Scenario: a six puts a pawn on the board
+    Given I input 2, red, green
+    When red rolls 6
+    And green rolls 2
+    And red rolls 3
+    Then red moves from 0 to 3
+    When green rolls 5
+    Then nothing moves
+```
 
 ## Start from a saved state
 
@@ -164,16 +191,21 @@ pyathy reads the constant from your program (it does not run it), so changing it
 ## Your own steps
 
 Every `*_steps.py` next to your `.feature` files is loaded, so a game can read like the
-game. `examples/monopoly/features/monopoly_steps.py` adds `Ann rolls 3+4 and buys` and
-`Ann has $1460`:
+game. A step is a pattern in [Cucumber style](https://github.com/cucumber/cucumber-expressions):
+`{name}` matches anything, `{name:w}` one word, `{n:d}` a whole number, and each field
+becomes a parameter of the function. `program.settle()` returns everything printed so far;
+`fail(program, message)` fails the step with the program's last lines under the message.
+`examples/monopoly/features/monopoly_steps.py` adds `Ann has $1460` and `Ann owns Harbour`:
 
 ```python
 from pyathy.steps import fail, step
 
-@step(r"(?P<name>\w+) has \$(?P<cash>\d+)")
+@step("{name:w} has ${cash:d}")
 def has(program, name, cash):
     ...
 ```
+
+`python pyathy steps` lists them under the built-ins, as written.
 
 ## Examples
 

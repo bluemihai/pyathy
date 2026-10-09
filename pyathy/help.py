@@ -60,6 +60,19 @@ STEPS = {
         ("I roll {4} and {6}", "two dice"),
         ("the random choice is {red}", "the next random pick returns this value"),
     ],
+    "Turns": [
+        ("{red} rolls {6}", "`I input enter` (if the program is waiting for it) then `I roll 6`,\n"
+                            "after checking it is red's turn: the last line announcing a turn\n"
+                            "names red and no other player, without digits, like 'Player red:'"),
+        ("{Ann} rolls {4}+{6}", "two dice (or: Ann rolls 4 and 6)"),
+        ("{red} rolls {3} and picks {2}", "the same, then types 2 at the question that follows\n(or: and answers 2)"),
+        ("these turns are played {3} times:", "a table with one step per row (| red rolls 5 |),\nrun in order, this many times"),
+        ("the players are {red} and {green}", "the names a turn announcement may use\n(otherwise: the names typed or rolled for so far)"),
+        ("{red}'s turn is announced", "a line names red and no other player, without digits\n(or: it is red's turn)"),
+        ("a pawn moves from {0} to {3}", "a line of this turn (since the last roll) has these two\n"
+                                         "numbers, 'to' or an arrow between them (or: red moves from 0 to 3)"),
+        ("nothing moves", "no such line this turn"),
+    ],
     "Checking": [
         ('{"Hello World"} is printed', "anywhere in the output (case ignored)"),
         ('{"ERROR"} is printed {3} times', ""),
@@ -67,17 +80,21 @@ STEPS = {
         ('the output starts with {"Welcome"}', ""),
         ("the output shows:", "these lines in a row (put them\nbetween two lines of three quotes)"),
         ('the program asks {"Player X, choose a square (1-9):"}', ""),
+        ('{"orange"} is refused with a message', "after typing it, a message was printed and\nthe same question was asked again"),
         ("the program ends", ""),
         ("the program is still running", ""),
     ],
     "Files": [
         ('a file {"game.txt"} containing {"round 3"}', "put this one-line file in the folder\nbefore the program starts"),
         ('a file {"game.txt"} with:', "the same, several lines (between\ntwo lines of three quotes)"),
+        ('there is no file {"game.txt"}', "the program starts without it, whatever is in\nyour folder (a saved game from playing, say)"),
         ('a file {"game.txt"} is written', "the program made it, or changed it"),
         ("no file is written", ""),
         ('the file {"game.txt"} contains {"round 4"}', "anywhere in the file (case ignored)"),
         ('the file {"game.txt"} contains:', "these lines in a row"),
-        ("a file {SAVE_FILE_NAME} with:", 'in every file step, an unquoted ALL_CAPS name is read\nfrom your program: SAVE_FILE_NAME = "game.txt" at its top'),
+        ("a file {SAVE_FILE_NAME} with:", 'in every file step, an unquoted ALL_CAPS name is read from\n'
+                                          'your program: SAVE_FILE_NAME = "game.txt" at the top of main.py\n'
+                                          '(or of another module; else the one file the program writes)'),
         ("the program is started again", "stop it and start it over in the same folder,\nso the files it wrote are still there"),
     ],
 }
@@ -120,6 +137,11 @@ class Styler:
     def marked(self, text):
         """`I input {4}` -> the 4 in the placeholder colour, braces gone."""
         return re.sub(r"\{([^{}]*)\}", lambda m: self.style(PLACEHOLDER, m.group(1)), text)
+
+    def own(self, pattern):
+        """A step pattern as its author wrote it: `{name} rolls {n:d}` -> `{name} rolls {n}`,
+        each {field} in the placeholder colour, braces kept."""
+        return re.sub(r"\{(\w*)(?::[^{}]*)?\}", lambda m: self.style(PLACEHOLDER, f"{{{m.group(1)}}}"), pattern)
 
     def paint(self, text, base=None, tokens=True):
         """`text` in the `base` colour (none: the default), with its quoted strings, file names
@@ -170,7 +192,7 @@ def steps_text(styler, own):
     for path, patterns in own:
         out += ["", styler.style(BOLD, "Your own steps") + styler.style(DIM, f"  ({path})")]
         for pattern in patterns:
-            out += styler.stanza(readable(pattern), "")
+            out += ["  " + styler.own(pattern)]
     return "\n".join(out + ["", STEPS_OUTRO])
 
 
@@ -191,64 +213,5 @@ def own_steps(folder="features"):
         except Exception as e:  # noqa: BLE001 - a broken steps file is reported, not fatal
             found.append((str(path), [f"(could not load it: {type(e).__name__}: {e})"]))
             continue
-        found.append((str(path), [pattern for pattern, _ in steps.REGISTERED[before:]]))
+        found.append((str(path), [entry[0] for entry in steps.REGISTERED[before:]]))
     return found
-
-
-def readable(pattern):
-    r"""A step's regex as a student reads it: `(?P<name>\w+) has \$(?P<cash>\d+)` -> `<name> has $<cash>`
-    (the <names> marked as placeholders). An optional part in [brackets], a bare character class as `…`;
-    the rest is kept as written."""
-    pattern = pattern.removeprefix("^")
-    if pattern.endswith("$") and not pattern.endswith(r"\$"):
-        pattern = pattern[:-1]
-    out, i = [], 0
-
-    def quantified(piece, at):
-        """Append `piece`, reading a quantifier after position `at`; returns the next index."""
-        if at < len(pattern) and pattern[at] == "?":
-            out.append(f"[{piece}]")
-            return at + 1
-        out.append(piece)
-        return at + 1 if at < len(pattern) and pattern[at] in "+*" else at
-
-    while i < len(pattern):
-        c = pattern[i]
-        if c == "\\" and i + 1 < len(pattern):
-            nxt = pattern[i + 1]
-            i = quantified("…" if nxt in "wdsWDS" else "" if nxt in "bB" else nxt, i + 2)
-        elif c == "(":
-            end = _close(pattern, i)
-            inner = pattern[i + 1:end]
-            if m := re.match(r"\?P<(\w+)>", inner):
-                text = f"{{<{m.group(1)}>}}"
-            else:
-                text = readable(inner.removeprefix("?:"))
-                if "|" in text and not (end + 1 < len(pattern) and pattern[end + 1] == "?"):
-                    text = f"({text})"
-            i = quantified(text, end + 1)
-        elif c == "[":
-            end = pattern.index("]", i + 2 if pattern[i + 1] == "]" else i + 1)
-            i = quantified("…", end + 1)
-        elif c == ".":
-            i = quantified("…", i + 1)
-        else:
-            i = quantified(c, i + 1)
-    return "".join(out)
-
-
-def _close(pattern, start):
-    """Index of the ')' matching the '(' at `start`."""
-    depth, i = 0, start
-    while i < len(pattern):
-        if pattern[i] == "\\":
-            i += 2
-            continue
-        if pattern[i] == "(":
-            depth += 1
-        elif pattern[i] == ")":
-            depth -= 1
-            if depth == 0:
-                return i
-        i += 1
-    return len(pattern) - 1

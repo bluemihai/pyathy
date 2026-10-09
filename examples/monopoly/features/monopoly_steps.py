@@ -2,14 +2,10 @@
 work like the built-in ones:
 
     Given Ann and Bob play 2 rounds
-    When Ann rolls 3+4 and buys
-    And Bob rolls 1+1 and doesn't buy
     Then Ann has $1380
     And Ann owns Harbour
 
-A roll step presses enter for that player and makes the two dice show those faces
-(the built-in `I roll 3 and 4` does the same for the dice). The checks read the last
-"  Ann: $1380, owns Harbour" line the game printed.
+The checks read the last "  Ann: $1380, owns Harbour" line the game printed.
 """
 
 import re
@@ -17,22 +13,12 @@ import re
 from pyathy.steps import fail, step
 
 
-@step(r"(?P<names>\w+(?:, \w+)* and \w+) play (?P<rounds>\d+) rounds?")
+@step("{names} play {rounds:d} rounds", "{names} play {rounds:d} round")
 def players(program, names, rounds):
+    """`Ann and Bob play 2 rounds`: types the number of players, their names and the rounds."""
     names = re.split(r", | and ", names)
-    program.type(str(len(names)), *names, rounds)
-
-
-@step(r"(?P<name>\w+) rolls (?P<first>\d)\+(?P<second>\d)(?: and (?P<choice>buys|doesn't buy))?")
-def rolls(program, name, first, second, choice):
-    program.settle()
-    lines = program.output.rstrip().splitlines()
-    if not lines or not lines[-1].startswith(f"{name}, press enter"):
-        fail(program, f"expected it to be {name}'s turn to roll")
-    program.type("")
-    program.roll(int(first), int(second))
-    if choice:
-        program.type("y" if choice == "buys" else "n")
+    program.players += names
+    program.type(str(len(names)), *names, str(rounds))
 
 
 def last_status(program, name):
@@ -43,15 +29,17 @@ def last_status(program, name):
     return int(cash), [s.strip() for s in streets.split(",")]
 
 
-@step(r"(?P<name>\w+) has \$(?P<cash>-?\d+)")
+@step("{name:w} has ${cash:d}")
 def has(program, name, cash):
+    """The last status line shows this much cash."""
     have, _ = last_status(program, name)
-    if have != int(cash):
+    if have != cash:
         fail(program, f"expected {name} to have ${cash}, but {name} has ${have}")
 
 
-@step(r"(?P<name>\w+) owns (?P<street>.+)")
+@step("{name:w} owns {street}")
 def owns(program, name, street):
+    """The last status line lists this street (or "nothing")."""
     _, streets = last_status(program, name)
     if street not in streets:
         fail(program, f"expected {name} to own {street}, but {name} owns {', '.join(streets)}")
