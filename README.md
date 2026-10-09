@@ -24,9 +24,14 @@ Then, from `my-game/`:
 ```
 python pyathy        # run every features/*.feature against main.py
 python pyathy -q     # quiet: one line per scenario and the total
+python pyathy -x     # fail fast: stop at the first scenario that fails (also --fail-fast)
+python pyathy --next-failure  # run the scenarios that failed last time, in order, stopping at the first that still fails
 python pyathy steps  # every step you can use (plus your own, from features/*_steps.py)
 python pyathy -h     # usage and an example feature
 ```
+
+`--next-failure` (as in rspec) reads the failures pyathy remembered in `.pyathy/last-run.json`
+(rewritten after every run; safe to gitignore); when all of them pass it runs everything else.
 
 By default each scenario's run is shown as a terminal would have shown it: what the
 program printed (boards, trees, prompts) and what was typed (bold, on a terminal with

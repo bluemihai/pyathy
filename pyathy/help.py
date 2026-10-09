@@ -17,6 +17,8 @@ USAGE = [
     ("pyathy init", "create features/hello.feature to start from"),
     ("pyathy steps", "list every step you can use"),
     ("-q, --quiet", "only one line per scenario and the total"),
+    ("-x, --fail-fast", "stop at the first scenario that fails"),
+    ("--next-failure", "run the scenarios that failed last time, in order,\nstopping at the first that still fails"),
     ("-h", "this help"),
 ]
 

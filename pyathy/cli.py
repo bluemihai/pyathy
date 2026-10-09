@@ -14,6 +14,7 @@ from pytest_bdd.parser import render_string
 from pytest_bdd.scenario import scenario_wrapper_template_registry
 
 from .help import Styler, colour_ok, help_text, own_steps, steps_text
+from .lastrun import LastRun, NextFailure, key
 from .program import ProgramError, student_python
 
 HELLO_FEATURE = '''Feature: Hello World
@@ -42,7 +43,7 @@ class Report:
     ✘; after all scenarios a summary of the ✔/✘ lines and the TOTAL line graders read.
     quiet: only the ✔/✘ lines and TOTAL."""
 
-    def __init__(self, broken=0, quiet=False):
+    def __init__(self, broken=0, quiet=False, lastrun=None, next_failure=None):
         self.errors = {}
         self.feature = None
         self.passed = 0
@@ -51,6 +52,11 @@ class Report:
         self.colour = colour_ok()
         self.programs = {}
         self.results = []    # (feature, line) per scenario, for the summary
+        self.lastrun = lastrun            # the .pyathy/last-run.json memory, rewritten at the end
+        self.next_failure = next_failure  # the NextFailure plugin under --next-failure, else None
+        self.keys, self.collected, self.count = {}, [], 0
+        self.ran, self.failed = set(), set()
+        self.command = command()
 
     def style(self, code, text):
         return f"\x1b[{code}m{text}\x1b[0m" if self.colour else text
@@ -101,19 +107,28 @@ class Report:
             print("\n".join(self.transcript(self.programs.get(nodeid))))
         self.programs.pop(nodeid, None)
         self.total += 1
+        self.ran.add(self.keys.get(nodeid))
         error = self.errors.get(nodeid)
         if error is None:
             self.passed += 1
             line = f"  {self.style(32, '✔')} {name}"
         else:
+            self.failed.add(self.keys.get(nodeid))
             line = f"  {self.style(31, '✘')} {name}"
         self.results.append((feature, line))
         print(line)
         if error is not None:
             print("\n".join(f"      {line}" for line in error.splitlines()))
+        order = self.next_failure.order if self.next_failure else []
+        if order and nodeid == order[-1] and error is None and self.count > len(order):
+            n = len(order)
+            verb = "passes" if n == 1 else "pass"
+            note = f"{plural(n, 'scenario')} that failed last time {verb} now; running everything else."
+            print(f"\n{self.style(1, note)}")
 
     def pytest_collection_finish(self, session):
         self.names, self.features = {}, {}
+        self.count = len(session.items)
         for item in session.items:
             scenario = scenario_wrapper_template_registry.get(item.obj)
             name = scenario.name if scenario else item.name
@@ -121,6 +136,8 @@ class Report:
             if example:  # a Scenario Outline row: its values, not the <placeholders>
                 name = render_string(name, example)
             self.names[item.nodeid] = name
+            self.keys[item.nodeid] = key(item)
+            self.collected.append(self.keys[item.nodeid])
             if scenario is not None:
                 self.features[item.nodeid] = scenario.feature.name
 
@@ -133,7 +150,34 @@ class Report:
                     shown = feature
                     print(f"Feature: {feature}")
                 print(line)
-        print(f"\nTOTAL  {self.passed} of {self.total}")
+        stopped = session is not None and bool(session.shouldfail or session.shouldstop)
+        not_run = self.count - len(self.ran - {None})
+        suffix = f" (stopped at the first failure; {plural(not_run, 'scenario')} not run)" if stopped else ""
+        print(f"\nTOTAL  {self.passed} of {self.total}{suffix}")
+        if stopped and self.next_failure:
+            order = self.next_failure.order
+            left = len(order) - len([n for n in order if n in self.names and self.keys[n] in self.ran])
+            rest = not_run - left
+            again = f"Fix it and run {self.command} --next-failure again:"
+            if left:
+                then = f", then the other {rest}" if rest else ""
+                print(f"{again} {left} more scenario{'' if left == 1 else 's'} that failed last time{then}.")
+            else:
+                then = f", so the other {rest} run next" if rest else ""
+                print(f"{again} it was the last one that failed last time{then}.")
+        if self.lastrun is not None:
+            self.lastrun.update([k for k in self.collected if k is not None], self.ran, self.failed,
+                                prune=self.next_failure is not None)
+
+
+def plural(n, noun):
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+def command():
+    """How this run was started, for a hint: `python pyathy` (the folder next to main.py) or `pyathy`."""
+    started = sys.argv[0]
+    return "python pyathy" if os.path.isdir(started) or started.endswith("__main__.py") else "pyathy"
 
 
 def init():
@@ -153,7 +197,10 @@ def init():
 def run(args):
     targets = [a for a in args if not a.startswith("-")] or ["features"]
     quiet = any(a in ("-q", "--quiet") for a in args)
-    flags = [a for a in args if a.startswith("-") and a not in ("-q", "--quiet")]
+    fail_fast = any(a in ("-x", "--fail-fast") for a in args)
+    next_failure = "--next-failure" in args
+    own = ("-q", "--quiet", "-x", "--fail-fast", "--next-failure")
+    flags = [a for a in args if a.startswith("-") and a not in own] + (["-x"] if fail_fast else [])
     files = []
     for t in targets:
         if os.path.isdir(t):
@@ -181,7 +228,17 @@ def run(args):
         return 2
     if how:
         print(f"Python: {python} ({how})")
-    report = Report(broken, quiet)
+    lastrun = LastRun()
+    plugins = []
+    if next_failure:
+        if lastrun.failed:
+            n = len(lastrun.failed)
+            print(f"{command()} --next-failure: {n} scenario{'' if n == 1 else 's'} failed last time; "
+                  f"running {'it' if n == 1 else 'them'} first, stopping at the first that still fails.")
+            plugins.append(NextFailure(lastrun.failed))
+        else:
+            print(f"{command()} --next-failure: no scenario failed last time; running everything.")
+    report = Report(broken, quiet, lastrun, plugins[0] if plugins else None)
     if not good:
         report.pytest_sessionfinish(None)
         return 1
@@ -190,7 +247,7 @@ def run(args):
         with open(runner, "w") as f:
             f.write(RUNNER.format(paths=", ".join(repr(p) for p in good)))
         code = pytest.main([runner, "--rootdir", tmp, "-p", "no:cacheprovider", "-p", "pyathy.steps",
-                            "-p", "no:terminal", *flags], plugins=[report])
+                            "-p", "no:terminal", *flags], plugins=[*plugins, report])
     return code or (1 if broken else 0)
 
 
