@@ -15,6 +15,7 @@ INTRO = "pyathy: test your Python program with scenarios written in plain Englis
 USAGE = [
     ("pyathy", "run every features/*.feature against main.py here"),
     ("pyathy {features/x.feature}", "run only that file (or folder)"),
+    ("pyathy check", "find mistakes in the feature files, without running main.py"),
     ("pyathy init", "create features/hello.feature to start from"),
     ("pyathy steps", "list every step you can use"),
 ]

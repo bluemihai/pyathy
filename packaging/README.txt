@@ -3,6 +3,7 @@ pyathy tests your Python program with scenarios written in plain English
 
 Run it from the folder that holds main.py and this pyathy folder:
   python pyathy        run every features/*.feature against main.py
+  python pyathy check  find mistakes in the feature files, without running main.py
   python pyathy steps  every step you can use
   python pyathy -h     usage and an example feature
 

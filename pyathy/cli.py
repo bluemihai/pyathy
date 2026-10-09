@@ -29,6 +29,18 @@ HELLO_FEATURE = '''Feature: Hello World
     When I start the program
     Then "Hello World" is printed
     And the program ends
+
+  # Two more scenarios to start from: remove the # in front of their lines,
+  # change them to fit your program, and run pyathy check to see they read right.
+  #
+  # Scenario: the program greets the name it is given
+  #   When I input Ada
+  #   Then "Hello Ada" is printed
+  #
+  # Scenario: a word where a number belongs is asked again
+  #   When I start the program
+  #   Then the program asks "How old are you?"
+  #   And "banana" is refused with a message
 '''
 
 HELLO_MAIN = 'print("Hello World")\n'
@@ -468,6 +480,9 @@ def main():
     if args[:1] in (["-v"], ["--version"]):
         print(version_line())
         sys.exit(0)
+    if args[:1] == ["check"]:
+        from .check import run as check
+        sys.exit(check(args[1:]))
     if args[:1] == ["steps"]:
         styler = Styler()
         print(steps_text(styler, own_steps()) + "\n" + title_line(styler))
