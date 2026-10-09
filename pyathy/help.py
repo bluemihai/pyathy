@@ -103,8 +103,9 @@ STEPS_INTRO = "Steps you can use (after Given, When, Then or And):"
 STEPS_OUTRO = """\
 Colours in your program's output are ignored when matching, and shown in the report.
 Each scenario runs your program from the start, in a copy of this folder.
-A folder with a Poetry pyproject.toml runs on its Poetry environment (run
-poetry install first); else a .venv in the folder; else pyathy's own Python."""
+A folder with a Poetry pyproject.toml that lists dependencies runs on its Poetry
+environment (run poetry install first); else a .venv in the folder; else pyathy's
+own Python (a Poetry project without dependencies runs there too)."""
 
 BOLD, DIM, PLACEHOLDER, GREEN, RED = "1", "2", "36", "32", "31"
 GHERKIN = re.compile(r"^(\s*)(Feature:|Scenario:|Given|When|Then|And|But)( .*)$")

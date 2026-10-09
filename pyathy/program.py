@@ -18,6 +18,7 @@ import sys
 import tempfile
 import threading
 import time
+import tomllib
 from collections import deque
 from multiprocessing.connection import Listener
 
@@ -80,11 +81,12 @@ def _digests(folder):
 def student_python(folder):
     """The Python the student runs their program with, as (path, how); how is None for pyathy's own.
 
-    (a) a Poetry project (pyproject.toml with [tool.poetry]) and poetry on PATH: its environment;
-    (b) a .venv in the folder; (c) the Python pyathy itself runs on."""
+    (a) a Poetry project (pyproject.toml with [tool.poetry]) that has dependencies, and poetry
+    on PATH: its environment; (b) a .venv in the folder; (c) the Python pyathy itself runs on.
+    A Poetry project without dependencies needs no environment of its own, so it runs on (b) or (c)."""
     pyproject = os.path.join(folder, "pyproject.toml")
     poetry = shutil.which("poetry")
-    if os.path.isfile(pyproject) and poetry and "[tool.poetry" in open(pyproject, encoding="utf-8", errors="replace").read():
+    if os.path.isfile(pyproject) and poetry and _needs_poetry(pyproject):
         env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "POETRY_ACTIVE")}
         done = subprocess.run([poetry, "env", "info", "--executable"], cwd=folder, env=env,
                               capture_output=True, text=True)
@@ -110,6 +112,25 @@ def student_python(folder):
         raise ProgramError(f"{how} has Python {'.'.join(version)} ({path}); pyathy needs Python "
                            f"{'.'.join(map(str, OLDEST_PYTHON))} or newer to run your program")
     return path, f"{how}, Python {'.'.join(version)}"
+
+
+def _needs_poetry(pyproject):
+    """Whether this pyproject.toml is a Poetry project with dependencies to install (a
+    `[tool.poetry]` table, and a dependency under [project] or [tool.poetry] besides python)."""
+    with open(pyproject, "rb") as f:
+        try:
+            data = tomllib.load(f)
+        except tomllib.TOMLDecodeError:
+            f.seek(0)
+            return b"[tool.poetry" in f.read()
+    poetry = data.get("tool", {}).get("poetry")
+    if poetry is None:
+        return False
+    listed = list(data.get("project", {}).get("dependencies", []))
+    listed += [d for d in poetry.get("dependencies", {}) if d != "python"]
+    for group in poetry.get("group", {}).values():
+        listed += list(group.get("dependencies", {}))
+    return bool(listed)
 
 
 def constant(app, name):
@@ -174,9 +195,20 @@ def _assignment(tree, name):
     return found
 
 
+def _assigned(tree, name):
+    """The value of the last `name = …` anywhere in the module (a constant at the top, or a
+    variable inside the function that opens the file), or None."""
+    found = None
+    for node in ast.walk(tree):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if any(isinstance(t, ast.Name) and t.id == name for t in targets) and getattr(node, "value", None) is not None:
+            found = node.value
+    return found
+
+
 def _written(tree):
     """The file names a module opens for writing: `open("save.txt", "w")`, the name a literal or
-    a constant of that module, the mode a literal starting with w or a."""
+    a name assigned one in that module, the mode a literal starting with w or a."""
     found = []
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open" and node.args):
@@ -186,20 +218,26 @@ def _written(tree):
             continue
         target = node.args[0]
         if isinstance(target, ast.Name):
-            target = getattr(_assignment(tree, target.id), "value", None)
+            target = _assigned(tree, target.id)
         if (text := _literal(target)) is not None:
             found.append(text)
     return found
 
 
 def _literal(node):
-    """A string literal, or literals joined with +; else None."""
+    """A file name the program spells out: a string literal, literals joined with +, the last
+    part of an os.path.join(…, "name") or of a pathlib `… / "name"` (the program runs in its own
+    folder, so that part is the file next to main.py); else None."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
         left, right = _literal(node.left), _literal(node.right)
         if left is not None and right is not None:
             return left + right
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        return _literal(node.right)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "join" and node.args:
+        return _literal(node.args[-1])
     return None
 
 
