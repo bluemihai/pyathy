@@ -74,7 +74,7 @@ def version_line():
 
 
 def title_line(styler):
-    """The dim first line of the report, `steps` and -h: which pyathy answered, from where."""
+    """The dim last line of the report, `steps` and -h: which pyathy answered, from where."""
     return styler.style(2, f"pyathy {__version__} · {origin()}")
 
 
@@ -300,6 +300,7 @@ class Report:
         if self.lastrun is not None:
             self.lastrun.update([k for k in self.collected if k is not None], self.ran, self.failed,
                                 prune=self.next_failure is not None)
+        print(title_line(self.styler))  # last, after TOTAL and any hint under it
 
 
 def plural(n, noun):
@@ -390,8 +391,6 @@ def run(args):
     if not files:
         print(f"pyathy: no .feature files in {', '.join(targets)}")
         return 2
-    styler = Styler()
-    print(title_line(styler))
     good, broken = [], 0
     for path in files:
         if (problem := gherkin_problem(path)) is None:
@@ -407,6 +406,7 @@ def run(args):
         python, how = student_python(folder)
     except ProgramError as e:
         print(f"pyathy: {e}")
+        print(title_line(Styler()))
         return 2
     if folder != os.getcwd():
         print(f"Program: {os.path.relpath(os.environ['PYATHY_APP'])}")
@@ -452,14 +452,14 @@ def main():
         sys.exit(init())
     if args[:1] in (["-h"], ["--help"]):
         styler = Styler()
-        print(title_line(styler) + "\n" + help_text(styler))
+        print(help_text(styler) + "\n" + title_line(styler))
         sys.exit(0)
     if args[:1] in (["-v"], ["--version"]):
         print(version_line())
         sys.exit(0)
     if args[:1] == ["steps"]:
         styler = Styler()
-        print(title_line(styler) + "\n" + steps_text(styler, own_steps()))
+        print(steps_text(styler, own_steps()) + "\n" + title_line(styler))
         sys.exit(0)
     sys.exit(run(args))
 

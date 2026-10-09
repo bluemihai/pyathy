@@ -54,8 +54,9 @@ longer than 200 lines shows its first 150 and last 50. After the last scenario c
 summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of m`. With
 `-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
 first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
-the full output. Every report opens with a dim `pyathy 0.3.0 · <where it runs from>` line, the
-same origin `-v` (`--version`) prints, so two copies of pyathy on one machine are never confused:
+the full output. Every report (and `pyathy steps`, `pyathy -h`) ends with a dim
+`pyathy 0.3.0 · <where it runs from>` line, under TOTAL and its hint, the same origin `-v`
+(`--version`) prints, so two copies of pyathy on one machine are never confused:
 the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv tool install -e`,
 or `installed: <site-packages>/pyathy`.
 
