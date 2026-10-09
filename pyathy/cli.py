@@ -21,7 +21,7 @@ from pytest_bdd.scenario import scenario_wrapper_template_registry
 from . import __version__
 from .help import BOLD, DIM, GREEN, RED, Styler, help_text, own_steps, steps_text
 from .lastrun import LastRun, NextFailure, key
-from .program import ProgramError, student_python
+from .program import ProgramError, plain, student_python
 
 HELLO_FEATURE = '''Feature: Hello World
 
@@ -108,13 +108,16 @@ class Report:
         return self.styler.paint(text, base, tokens)
 
     def transcript(self, program):
-        """The program's run as a terminal showed it, under a gutter; typed answers in bold."""
+        """The program's run as a terminal showed it, under a gutter; typed answers in bold.
+        With colour off (piped, NO_COLOR) the program's own colour codes go too: plain text."""
         if program is None or program.state == "new":
             return [self.style(2, "  │ ") + self.style(2, "(the program did not start)")]
         lines = []
         for text, typed in [*program.runs, (program.output, program.typed)]:
             if lines:  # an earlier run, then the run after "the program is started again"
                 lines.append(self.style(2, "[the program is started again]"))
+            if not self.colour:
+                text = plain(text)
             pieces, at = [], 0
             for start, end in typed if self.colour else []:
                 pieces += [text[at:start], self.style(1, text[start:end])]
