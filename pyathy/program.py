@@ -7,6 +7,7 @@ rolls are consumed in their own order, whichever the program asks for first.
 """
 
 import functools
+import hashlib
 import os
 import secrets
 import shutil
@@ -44,6 +45,22 @@ def skip(folder, names):
         if name not in skipped and os.path.realpath(os.path.join(folder, name)) == OWN_FOLDER:
             skipped.add(name)
     return skipped
+
+
+def _digests(folder):
+    """{relative path: digest of its contents} for every file under `folder` (the clutter
+    copytree skips, __pycache__ and .pyathy, left out), to tell which files a run wrote."""
+    found = {}
+    for root, dirs, files in os.walk(folder):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", ".git", ".venv", "node_modules", ".pyathy")]
+        for name in files:
+            path = os.path.join(root, name)
+            try:
+                with open(path, "rb") as f:
+                    found[os.path.relpath(path, folder).replace(os.sep, "/")] = hashlib.blake2b(f.read()).digest()
+            except OSError:
+                pass
+    return found
 
 
 @functools.cache
@@ -100,6 +117,9 @@ class Program:
         self.conn = None
         self.proc = None
         self.workdir = None
+        self.files = []           # (name, text) to write into the copy before the first start
+        self.snapshot = None      # {relative path: digest} of the copy's files at the first start
+        self.runs = []            # (output, typed) of each earlier run, after "started again"
         # A features folder's own steps may answer requests themselves (a whole Monopoly
         # turn, say): called with each request first; it returns a reply, or None for the queues.
         self.answerer = None
@@ -138,7 +158,26 @@ class Program:
         self.advance()
         return self.output
 
-    def close(self):
+    def write_file(self, name, text):
+        """A file the scenario puts in the program's folder: written into the copy now, or
+        staged for the first start when there is no copy yet."""
+        if self.workdir is None:
+            self.files.append((name, text))
+            return
+        path = os.path.join(self.workdir, name)
+        os.makedirs(os.path.dirname(path) or self.workdir, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def changed_files(self):
+        """The files the program wrote: new since the first start, or with other contents."""
+        if self.snapshot is None:
+            return []
+        now = _digests(self.workdir)
+        return sorted(name for name, digest in now.items() if self.snapshot.get(name) != digest)
+
+    def stop(self):
+        """End the current run (the process), keeping the copy of the folder."""
         if self.conn is not None:
             try:
                 if self.request is not None:
@@ -149,19 +188,40 @@ class Program:
         if self.proc is not None and self.proc.poll() is None:
             self.proc.kill()
             self.proc.wait()
+        self.conn = self.proc = None
+
+    def close(self):
+        self.stop()
         if self.workdir:
             shutil.rmtree(self.workdir, ignore_errors=True)
+
+    def restart(self):
+        """Stop the program and start it again in the same copy of the folder, with the files
+        it wrote still there (a saved game loads). Its earlier run moves to `runs`; output,
+        typed and state are the new run's."""
+        if self.state == "new":
+            raise ProgramError('"the program is started again" needs a run before it:'
+                               ' start the program first (an input, a roll, a check)')
+        self.stop()
+        self.runs.append((self.output, self.typed))
+        self.output, self.typed = "", []
+        self.state, self.request, self.exit_code, self.crash = "new", None, None, None
+        self.advance()
 
     # ---- the run loop ------------------------------------------------------
 
     def start(self):
         if not os.path.exists(self.app):
             raise ProgramError(f"there is no {os.path.basename(self.app)} in {os.path.dirname(self.app)}")
-        # A fresh copy of the folder per scenario: a save file from one scenario never
-        # leaks into the next, and nothing is ever written into the student's folder.
-        self.workdir = tempfile.mkdtemp(prefix="pyathy-work-")
-        shutil.copytree(os.path.dirname(self.app), self.workdir, dirs_exist_ok=True, ignore=skip,
-                        ignore_dangling_symlinks=True)
+        if self.workdir is None:
+            # A fresh copy of the folder per scenario: a save file from one scenario never
+            # leaks into the next, and nothing is ever written into the student's folder.
+            self.workdir = tempfile.mkdtemp(prefix="pyathy-work-")
+            shutil.copytree(os.path.dirname(self.app), self.workdir, dirs_exist_ok=True, ignore=skip,
+                            ignore_dangling_symlinks=True)
+            for name, text in self.files:
+                self.write_file(name, text)
+            self.snapshot = _digests(self.workdir)
         app = os.path.join(self.workdir, os.path.basename(self.app))
         key = secrets.token_bytes(16)
         if sys.platform == "win32":

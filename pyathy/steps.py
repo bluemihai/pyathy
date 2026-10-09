@@ -177,11 +177,8 @@ def running(program):
 
 # ---- after every scenario ------------------------------------------------------
 
-def pytest_bdd_after_scenario(request, feature, scenario):
+def unused(program, when="the program never used"):
     """A roll or input the scenario scripted but the program never used is a failure."""
-    program = request.getfixturevalue("program")
-    if program.state == "new":
-        return
     program.settle()
     left = []
     if program.dice:
@@ -189,18 +186,85 @@ def pytest_bdd_after_scenario(request, feature, scenario):
     if program.inputs:
         left.append(f"inputs {', '.join(repr(i) for i in program.inputs)}")
     if left:
-        fail(program, f"the program never used the scripted {' and '.join(left)}")
+        fail(program, f"{when} the scripted {' and '.join(left)}")
+
+
+def pytest_bdd_after_scenario(request, feature, scenario):
+    program = request.getfixturevalue("program")
+    if program.state != "new":
+        unused(program)
+
+
+# ---- files ---------------------------------------------------------------------
+
+@step(r'a file "(?P<name>[^"]+)" containing "(?P<text>[^"]*)"')
+def file_with_line(program, name, text):
+    """A one-line file in the program's folder before it starts (written into the copy)."""
+    program.write_file(name, text + "\n")
+
+
+@step(r'a file "(?P<name>[^"]+)" with:?')
+def file_with(program, name, docstring):
+    """The same with several lines, between two lines of three quotes."""
+    program.write_file(name, docstring + "\n")
+
+
+def file_text(program, name):
+    program.settle()
+    path = os.path.join(program.workdir or "", name)
+    if not os.path.isfile(path):
+        fail(program, f'expected a file "{name}", but the program did not write one')
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+@step(r'a file "(?P<name>[^"]+)" is written')
+def file_written(program, name):
+    program.settle()
+    if name not in program.changed_files():
+        if os.path.isfile(os.path.join(program.workdir or "", name)):
+            fail(program, f'expected the program to write the file "{name}", but it is as it was')
+        fail(program, f'expected the program to write a file "{name}", but it did not'
+             f"{_wrote(program)}")
+
+
+@step(r"no file is written")
+def no_file_written(program):
+    program.settle()
+    if program.changed_files():
+        fail(program, f"expected the program to write no file{_wrote(program)}")
+
+
+def _wrote(program):
+    written = program.changed_files()
+    return f"; it wrote: {', '.join(written)}" if written else "; it wrote no file"
 
 
 @step(r'the file "(?P<name>[^"]+)" contains "(?P<text>[^"]*)"')
 def file_contains(program, name, text):
-    program.settle()
-    path = os.path.join(program.workdir or "", name)
-    if not os.path.exists(path):
-        fail(program, f'expected a file "{name}", but the program did not write one')
-    with open(path, encoding="utf-8", errors="replace") as f:
-        if norm(text) not in norm(f.read()):
-            fail(program, f'expected the file "{name}" to contain "{text}"')
+    if norm(text) not in norm(file_text(program, name)):
+        fail(program, f'expected the file "{name}" to contain "{text}"')
+
+
+@step(r'the file "(?P<name>[^"]+)" contains:?')
+def file_shows(program, name, docstring):
+    """These lines in a row, like `the output shows:`."""
+    want = [line.rstrip().lower() for line in docstring.splitlines()]
+    have = [line.rstrip().lower() for line in file_text(program, name).splitlines()]
+    for i in range(len(have) - len(want) + 1):
+        if have[i:i + len(want)] == want:
+            return
+    shown = "\n".join(f"    | {line}" for line in docstring.splitlines())
+    fail(program, f'expected the file "{name}" to contain these lines, in a row:\n{shown}')
+
+
+@step(r"the program is started again")
+def started_again(program):
+    """Stop the program and start it again in the same folder, with the files it wrote still
+    there. The steps after this one read the new run; the report shows both."""
+    if program.state != "new":
+        unused(program, 'before "the program is started again", the program never used')
+    program.restart()
 
 
 # ---- a features folder's own steps ---------------------------------------------

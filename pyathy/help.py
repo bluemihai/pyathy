@@ -60,7 +60,15 @@ STEPS = {
         ('the program asks {"Player X, choose a square (1-9):"}', ""),
         ("the program ends", ""),
         ("the program is still running", ""),
-        ('the file {"scores.txt"} contains {"Ann 3"}', "a file the program wrote"),
+    ],
+    "Files": [
+        ('a file {"game.txt"} containing {"round 3"}', "put this one-line file in the folder\nbefore the program starts"),
+        ('a file {"game.txt"} with:', "the same, several lines (between\ntwo lines of three quotes)"),
+        ('a file {"game.txt"} is written', "the program made it, or changed it"),
+        ("no file is written", ""),
+        ('the file {"game.txt"} contains {"round 4"}', "anywhere in the file (case ignored)"),
+        ('the file {"game.txt"} contains:', "these lines in a row"),
+        ("the program is started again", "stop it and start it over in the same folder,\nso the files it wrote are still there"),
     ],
 }
 
@@ -113,6 +121,14 @@ class Styler:
             out = [first + " " * (column - width) + self.style(DIM, lines.pop(0))]
         return out + [" " * column + self.style(DIM, line) for line in lines]
 
+    def stanza(self, step, explanation):
+        """`  <step>` on its own line, its explanation dim on the next, indented further
+        (man-page style); an explanation written over two lines is joined into one."""
+        out = ["  " + self.marked(step)]
+        if explanation:
+            out.append("      " + self.style(DIM, " ".join(explanation.splitlines())))
+        return out
+
     def gherkin(self, text):
         """Feature/Scenario/When/Then/And in bold."""
         return "\n".join(f"{m.group(1)}{self.style(BOLD, m.group(2))}{m.group(3)}" if (m := GHERKIN.match(line))
@@ -127,16 +143,17 @@ def help_text(styler):
 
 
 def steps_text(styler, own):
-    """The built-in step list, then the steps of each *steps.py in `own`."""
+    """The built-in step list, then the steps of each *steps.py in `own`: like a man page,
+    each step on its own line and its explanation (dim) indented under it."""
     out = [STEPS_INTRO]
     for section, entries in STEPS.items():
         out += ["", styler.style(BOLD, section)]
         for step, explanation in entries:
-            out += styler.entry(step, explanation, 35)
+            out += styler.stanza(step, explanation)
     for path, patterns in own:
         out += ["", styler.style(BOLD, "Your own steps") + styler.style(DIM, f"  ({path})")]
         for pattern in patterns:
-            out += styler.entry(readable(pattern), "", 35)
+            out += styler.stanza(readable(pattern), "")
     return "\n".join(out + ["", STEPS_OUTRO])
 
 

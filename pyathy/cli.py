@@ -59,11 +59,15 @@ class Report:
         """The program's run as a terminal showed it, under a gutter; typed answers in bold."""
         if program is None or program.state == "new":
             return [self.style(2, "  │ ") + self.style(2, "(the program did not start)")]
-        text, pieces, at = program.output, [], 0
-        for start, end in program.typed if self.colour else []:
-            pieces += [text[at:start], self.style(1, text[start:end])]
-            at = end
-        lines = ("".join(pieces) + text[at:]).splitlines() or [self.style(2, "(the program printed nothing)")]
+        lines = []
+        for text, typed in [*program.runs, (program.output, program.typed)]:
+            if lines:  # an earlier run, then the run after "the program is started again"
+                lines.append(self.style(2, "[the program is started again]"))
+            pieces, at = [], 0
+            for start, end in typed if self.colour else []:
+                pieces += [text[at:start], self.style(1, text[start:end])]
+                at = end
+            lines += ("".join(pieces) + text[at:]).splitlines() or [self.style(2, "(the program printed nothing)")]
         more = len(lines) - MAX_TRANSCRIPT
         if more > 0:  # the start and the end (where a failure usually is), the middle counted
             head = MAX_TRANSCRIPT * 3 // 4

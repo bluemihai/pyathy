@@ -77,7 +77,44 @@ the parts you replace in cyan).
 | `the output shows:` + lines between `"""` | these lines, in a row |
 | `the program asks "Your name?"` | it is now waiting for input after that question |
 | `the program ends` / `the program is still running` | |
-| `the file "scores.txt" contains "Ann 3"` | a file the program wrote |
+| `a file "game.txt" containing "round 3"` | put this one-line file in the folder before the program starts |
+| `a file "game.txt" with:` + lines between `"""` | the same, several lines |
+| `a file "game.txt" is written` / `no file is written` | the program made a file, or changed one |
+| `the file "game.txt" contains "round 4"` | anywhere in the file |
+| `the file "game.txt" contains:` + lines between `"""` | these lines, in a row |
+| `the program is started again` | stop it and start it over in the same folder, so the files it wrote are still there |
+
+## Start from a saved state
+
+A program that saves its state to a text file is easy to test from any point: dictate the
+file, start the program, play a move, and check the file (or what is printed). Each scenario
+runs in a copy of your folder, so the dictated file and whatever the program writes never
+touch your own files. For a save-then-load check in one scenario, `the program is started
+again` restarts it in that same copy, with its save file still there; the steps after it
+read the new run, and the report shows both runs.
+
+```gherkin
+Feature: Counter
+
+  Scenario: it continues from the saved count and saves the new one
+    Given a file "count.txt" with:
+      """
+      3
+      """
+    When I start the program
+    Then "Count: 3" is printed
+    When I input enter, q
+    Then the file "count.txt" contains:
+      """
+      4
+      """
+
+  Scenario: save, start again, it continued
+    When I input enter, enter, q
+    Then a file "count.txt" is written
+    When the program is started again
+    Then "Count: 2" is printed
+```
 
 ## Your own steps
 
