@@ -1,6 +1,7 @@
 """The built-in steps (PRD section 4). Each works after Given, When, Then, And or But.
 
-Matching ignores case and trailing spaces, unless the step says "exactly".
+Matching ignores case and trailing spaces, unless the step says "exactly", and always ignores
+the colour codes a program prints (program.settle(), .text and .turn_output() are plain).
 """
 
 import importlib.util
@@ -13,7 +14,7 @@ import sys
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from .program import Program, ProgramError, constant
+from .program import Program, ProgramError, constant, plain
 
 
 REGISTERED = []  # (pattern, file, parser, function) of every step, for `pyathy steps` and turn tables
@@ -145,7 +146,7 @@ def announced(line, players):
 def announcements(program, since=0):
     """[(line, player)] of every turn announcement in the output from `since` on."""
     found = []
-    for line in program.output[since:].splitlines():
+    for line in plain(program.output[since:]).splitlines():
         player = announced(line, program.players)
         if player:
             found.append((line.strip(), player))
@@ -311,7 +312,7 @@ def asks(program, text):
     program.settle()
     if program.request is None or program.request[0] != "input":
         fail(program, f'expected the program to ask "{text}"')
-    tail = norm(program.output)[-(len(text) + 200):]
+    tail = norm(program.text)[-(len(text) + 200):]
     if norm(text) not in tail:
         fail(program, f'expected the program to ask "{text}"')
 
@@ -319,15 +320,16 @@ def asks(program, text):
 @step('"{text}" is refused with a message')
 def refused(program, text):
     """After typing it, a message was printed and the same question was asked again."""
-    out = program.settle()
+    program.settle()
+    out = program.output  # raw: `typed` indexes into it; what is read from it is made plain
     typed = program.typed
     tries = [k for k, (start, end) in enumerate(typed) if out[start:end] == text]
     if not tries:
         fail(program, f"{text!r} was never typed")
     for k in tries:
         start, end = typed[k]
-        question = question_before(out, start)
-        after = out[end:typed[k + 1][0] if k + 1 < len(typed) else len(out)]
+        question = plain(question_before(out, start))
+        after = plain(out[end:typed[k + 1][0] if k + 1 < len(typed) else len(out)])
         asked_again = bool(question) and question in after
         message = any(line.strip() and line.strip() != question for line in after.splitlines())
         if asked_again and message:

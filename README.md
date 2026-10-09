@@ -82,8 +82,9 @@ Feature: Tic Tac Toe
 ## Built-in steps
 
 Each works after `Given`, `When`, `Then`, `And` or `But`. Text checks ignore case and
-trailing spaces. `python pyathy steps` prints this list (colour-coded on a terminal:
-the parts you replace in cyan).
+trailing spaces. Colours in your program's output (`\033[31m`-style codes) are ignored when
+matching, and shown in the report. `python pyathy steps` prints this list (colour-coded on
+a terminal: the parts you replace in cyan).
 
 | Step | What it does |
 |---|---|

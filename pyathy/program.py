@@ -10,6 +10,7 @@ import ast
 import functools
 import hashlib
 import os
+import re
 import secrets
 import shutil
 import subprocess
@@ -29,6 +30,17 @@ OLDEST_PYTHON = (3, 9)  # the oldest Python _boot.py is known to run under (test
 
 class ProgramError(AssertionError):
     pass
+
+
+# Terminal escape sequences a program colours its output with: CSI (\x1b[31m, cursor moves),
+# OSC (\x1b]0;title\x07) and the two-character escapes. Every check reads the output without
+# them (plain), so "\x1b[31mPlayer red:\x1b[0m" is "Player red:"; the transcript keeps them.
+ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-Z\\-_]")
+
+
+def plain(text):
+    """`text` without terminal escape sequences (colours, bold, cursor moves)."""
+    return ESCAPES.sub("", text) if "\x1b" in text else text
 
 
 # The folder pyathy runs from, never copied along with the student's: the student folder
@@ -219,8 +231,9 @@ class Program:
         # say): called with each request first; it returns a reply, or None for the queues.
         self.answerer = None
 
-    # Everything printed (and echoed) so far. Kept as a list of pieces so a program that
-    # prints megabytes in small writes costs linear time, joined only when a step reads it.
+    # Everything printed (and echoed) so far, as the terminal got it (colour codes and all:
+    # the transcript shows them, and `typed` indexes into it). Kept as a list of pieces so a
+    # program that prints megabytes in small writes costs linear time, joined only when read.
     @property
     def output(self):
         if len(self._parts) > 1:
@@ -230,6 +243,11 @@ class Program:
     @output.setter
     def output(self, text):
         self._parts, self._size = [text], len(text)
+
+    # The same without colours: what every check reads.
+    @property
+    def text(self):
+        return plain(self.output)
 
     def _print(self, text):
         self._parts.append(text)
@@ -265,12 +283,13 @@ class Program:
         self.advance()
 
     def turn_output(self):
-        """What the program printed since the last roll (everything, before any roll)."""
-        return self.output[self.turn_start or 0:]
+        """What the program printed since the last roll (everything, before any roll), plain."""
+        return plain(self.output[self.turn_start or 0:])
 
     def settle(self):
+        """Run the program as far as it can; returns the plain output (checks read this)."""
         self.advance()
-        return self.output
+        return self.text
 
     def write_file(self, name, text):
         """A file the scenario puts in the program's folder: written into the copy now, or
@@ -444,7 +463,7 @@ class Program:
         return f"a die roll ({self.request[1]})" if self.request[2] else self.request[1]
 
     def tail(self, n=15):
-        lines = self.output.splitlines()[-n:]
+        lines = self.text.splitlines()[-n:]
         if not lines:
             return "the program printed nothing"
         shown = "\n".join(f"    | {line}" for line in lines)

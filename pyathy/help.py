@@ -101,6 +101,7 @@ STEPS = {
 
 STEPS_INTRO = "Steps you can use (after Given, When, Then or And):"
 STEPS_OUTRO = """\
+Colours in your program's output are ignored when matching, and shown in the report.
 Each scenario runs your program from the start, in a copy of this folder.
 A folder with a Poetry pyproject.toml runs on its Poetry environment (run
 poetry install first); else a .venv in the folder; else pyathy's own Python."""
