@@ -404,6 +404,12 @@ def file_with_line(program, name, text):
     program.write_file(file_name(program, name), text + "\n")
 
 
+@_re(rf'a file {NAME}')
+def empty_file(program, name):
+    """An empty file in the program's folder before it starts, its folders made too."""
+    program.write_file(file_name(program, name), "")
+
+
 @_re(rf'a file {NAME} with:?')
 def file_with(program, name, docstring):
     """The same with several lines, between two lines of three quotes."""

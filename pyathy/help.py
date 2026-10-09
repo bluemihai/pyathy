@@ -87,6 +87,7 @@ STEPS = {
         ("the program is still running", ""),
     ],
     "Files": [
+        ('a file {"photos/beach.jpg"}', "an empty file in the folder before the program\nstarts (its folders made too)"),
         ('a file {"game.txt"} containing {"round 3"}', "put this one-line file in the folder\nbefore the program starts"),
         ('a file {"game.txt"} with:', "the same, several lines (between\ntwo lines of three quotes)"),
         ('there is no file {"game.txt"}', "the program starts without it, whatever is in\nyour folder (a saved game from playing, say)"),

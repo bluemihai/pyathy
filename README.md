@@ -142,6 +142,7 @@ a terminal: the parts you replace in cyan).
 | `the program asks "Your name?"` | it is now waiting for input after that question |
 | `"orange" is refused with a message` | after typing it, a message was printed and the same question was asked again |
 | `the program ends` / `the program is still running` | |
+| `a file "photos/beach.jpg"` | an empty file in the folder before the program starts (its folders made too) |
 | `a file "game.txt" containing "round 3"` | put this one-line file in the folder before the program starts |
 | `a file "game.txt" with:` + lines between `"""` | the same, several lines |
 | `there is no file "game.txt"` | the program starts without it, whatever is in your folder (a saved game from playing, say) |
