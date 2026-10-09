@@ -2,9 +2,11 @@
 output instead of pytest's). The help and step texts live in help.py.
 """
 
+import difflib
 import json
 import os
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -17,7 +19,7 @@ from pytest_bdd.parser import render_string
 from pytest_bdd.scenario import scenario_wrapper_template_registry
 
 from . import __version__
-from .help import Styler, colour_ok, help_text, own_steps, steps_text
+from .help import BOLD, DIM, GREEN, RED, Styler, help_text, own_steps, steps_text
 from .lastrun import LastRun, NextFailure, key
 from .program import ProgramError, student_python
 
@@ -40,6 +42,14 @@ scenarios({paths})
 
 MAX_TRANSCRIPT = 200  # lines of one scenario's run shown (its first 150, its last 50); the rest is counted
 PIPED_WIDTH = 120     # columns a -q reason line is cut to when the output is not a terminal
+
+# The shapes of a reason's lines, coloured by meaning (the text itself is never changed):
+# `expected X, but Y` splits where the observed part starts; a block of `    | ` lines follows a
+# header that announces the expected lines (green) or the lines the program printed (red in a diff)
+OBSERVED = re.compile(r"(, but |; but | but |; files written: |; it wrote)")
+EXPECTED_BLOCK = re.compile(r"^expected .*(?:these lines|these rows|to contain).*:$")
+PRINTED_BLOCK = re.compile(r"^(?:the last \d+ lines|the only line) printed:$")
+BLOCK = "    | "
 
 
 def origin():
@@ -75,7 +85,8 @@ class Report:
         self.passed = 0
         self.total = broken  # each unreadable feature file counts as one failed scenario
         self.quiet = quiet
-        self.colour = colour_ok()
+        self.styler = Styler()
+        self.colour = self.styler.colour
         self.width = shutil.get_terminal_size().columns if sys.stdout.isatty() else PIPED_WIDTH
         self.programs = {}
         self.results = []    # (feature, line) per scenario, for the summary
@@ -86,7 +97,10 @@ class Report:
         self.command = command()
 
     def style(self, code, text):
-        return f"\x1b[{code}m{text}\x1b[0m" if self.colour else text
+        return self.styler.style(code, text)
+
+    def paint(self, text, base=None, tokens=True):
+        return self.styler.paint(text, base, tokens)
 
     def transcript(self, program):
         """The program's run as a terminal showed it, under a gutter; typed answers in bold."""
@@ -110,17 +124,87 @@ class Report:
 
     def reason(self, error):
         """Why a scenario failed, indented under its ✘ line: the whole message, or under -q
-        its first non-empty line cut to the terminal's width (the rest is a run without -q)."""
-        lines = [f"      {line}" for line in error.splitlines()]
+        its first non-empty line cut to the terminal's width (the rest is a run without -q).
+        On a terminal the lines are coloured by what they say (reason_lines)."""
         if not self.quiet:
-            return "\n".join(lines)
-        filled = [line for line in lines if line.strip()]
-        first = filled[0] if filled else "      ?"
+            return "\n".join(f"      {line}" for line in self.reason_lines(error.splitlines()))
+        filled = [line for line in error.splitlines() if line.strip()]
+        first = filled[0] if filled else "?"
         if first.rstrip().endswith(":") and len(filled) > 1:  # "expected these lines, in a row:" + the first one
             first = f"{first.rstrip()} {filled[1].strip()}"
-        if len(first) > self.width:
-            first = first[:max(self.width - 1, 1)] + "…"
-        return first
+        if len(first) + 6 > self.width:
+            first = first[:max(self.width - 7, 1)] + "…"
+        return "      " + self.reason_line(first)
+
+    def reason_lines(self, lines):
+        """The lines of a reason, coloured by meaning. The block of lines the scenario expected
+        (`expected these lines, in a row:` + `    | ` lines) is shown as a diff against the block
+        the program printed (`the last N lines printed:`) when the message has both: `+ ` expected
+        lines green, `- ` printed lines red, lines in both dim. A file's expected lines have no
+        printed twin in the message, so they stay green on their own."""
+        printed = None
+        for i, line in enumerate(lines):
+            if PRINTED_BLOCK.match(line):
+                printed = [text[len(BLOCK):] for text in lines[i + 1:] if text.startswith(BLOCK)]
+        out, i = [], 0
+        while i < len(lines):
+            line = lines[i]
+            out.append(self.reason_line(line))
+            i += 1
+            if EXPECTED_BLOCK.match(line):
+                want = []
+                while i < len(lines) and lines[i].startswith(BLOCK):
+                    want.append(lines[i][len(BLOCK):])
+                    i += 1
+                if printed and "the file" not in line:
+                    out += self.diff(want, printed)
+                else:
+                    out += [self.paint(BLOCK + text, GREEN) for text in want]
+        return out
+
+    def reason_line(self, line):
+        """One line of a reason: what was expected green and what was observed red (`expected X,
+        but Y`; `closest line printed: …`), quoted strings and file names cyan, a `note:` and where
+        the program stopped dim, the turns played dim but the last one (where it failed)."""
+        if line.startswith("expected "):
+            m = OBSERVED.search(line)
+            if m:
+                return self.paint(line[:m.start()], GREEN) + self.paint(line[m.start():], RED)
+            return self.paint(line, GREEN)
+        if line.startswith("closest line printed:"):
+            return self.paint(line, RED, tokens=False)
+        if line.startswith(("note:", "the program is waiting for ", "the program has ended")):
+            return self.paint(line, DIM)
+        if line.startswith("turns: "):
+            head, sep, last = line.rpartition(" · ")
+            if not sep:
+                head, sep, last = "turns:", " ", line[len("turns: "):]
+            return self.paint(head + sep, DIM) + self.paint(last)
+        return self.paint(line)
+
+    def diff(self, want, have):
+        """`want` (the expected lines) against the window of `have` (the printed lines) that
+        matches it best, the usual way round: `- ` what was printed, `+ ` what was expected.
+        Lines are compared as the steps compare them (trailing spaces and case ignored)."""
+        def norm(text):
+            return text.rstrip().lower()
+        best, score = have, -1.0
+        for size in range(len(want), len(want) + 3):
+            for start in range(max(len(have) - size + 1, 1)):
+                window = have[start:start + size]
+                ratio = difflib.SequenceMatcher(None, "\n".join(map(norm, window)),
+                                                "\n".join(map(norm, want))).ratio()
+                if ratio > score:
+                    best, score = window, ratio
+        out = []
+        matcher = difflib.SequenceMatcher(None, [norm(t) for t in best], [norm(t) for t in want])
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == "equal":
+                out += [self.paint(f"      {text}", DIM, tokens=False) for text in best[i1:i2]]
+                continue
+            out += [self.paint(f"    - {text}", RED, tokens=False) for text in best[i1:i2]]
+            out += [self.paint(f"    + {text}", GREEN, tokens=False) for text in want[j1:j2]]
+        return out
 
     def pytest_collectreport(self, report):
         if report.failed:
@@ -189,7 +273,7 @@ class Report:
             for feature, line in self.results:
                 if feature is not None and feature != shown:
                     shown = feature
-                    print(f"Feature: {feature}")
+                    print(self.style(BOLD, f"Feature: {feature}"))
                 print(line)
         stopped = session is not None and bool(session.shouldfail or session.shouldstop)
         not_run = self.count - len(self.ran - {None})

@@ -88,8 +88,12 @@ Each scenario runs your program from the start, in a copy of this folder.
 A folder with a Poetry pyproject.toml runs on its Poetry environment (run
 poetry install first); else a .venv in the folder; else pyathy's own Python."""
 
-BOLD, DIM, PLACEHOLDER = "1", "2", "36"
+BOLD, DIM, PLACEHOLDER, GREEN, RED = "1", "2", "36", "32", "31"
 GHERKIN = re.compile(r"^(\s*)(Feature:|Scenario:|Given|When|Then|And|But)( .*)$")
+# What a reason line quotes from the student's world, shown in the placeholder colour: a "quoted"
+# or 'quoted' string (an apostrophe inside a word is not a quote), a file name, an ALL_CAPS constant
+TOKEN = re.compile(r'"[^"]*"|(?<!\w)\'[^\']*\'(?!\w)|\b[\w.-]+\.(?:py|txt|sav|json|csv|feature|md)\b'
+                   r'|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b')
 
 
 def colour_ok():
@@ -116,6 +120,20 @@ class Styler:
     def marked(self, text):
         """`I input {4}` -> the 4 in the placeholder colour, braces gone."""
         return re.sub(r"\{([^{}]*)\}", lambda m: self.style(PLACEHOLDER, m.group(1)), text)
+
+    def paint(self, text, base=None, tokens=True):
+        """`text` in the `base` colour (none: the default), with its quoted strings, file names
+        and ALL_CAPS constants in the placeholder colour inside it (tokens=False: not)."""
+        if not self.colour or not text:
+            return text
+        back, close = (f"\x1b[{base}m", "\x1b[0m") if base else ("", "")
+        if tokens:  # a token closes the base colour and reopens it after itself
+            text = TOKEN.sub(lambda m: f"{close}\x1b[{PLACEHOLDER}m{m.group(0)}\x1b[0m{back}", text)
+        if not base:
+            return text
+        if text.endswith(back):  # a token at the end: its own reset already closed the line
+            return back + text[:-len(back)]
+        return f"{back}{text}{close}"
 
     def stanza(self, step, explanation):
         """`  <step>` on its own line, its explanation dim on the next, indented further
