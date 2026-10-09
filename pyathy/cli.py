@@ -114,7 +114,10 @@ class Report:
         lines = [f"      {line}" for line in error.splitlines()]
         if not self.quiet:
             return "\n".join(lines)
-        first = next((line for line in lines if line.strip()), "      ?")
+        filled = [line for line in lines if line.strip()]
+        first = filled[0] if filled else "      ?"
+        if first.rstrip().endswith(":") and len(filled) > 1:  # "expected these lines, in a row:" + the first one
+            first = f"{first.rstrip()} {filled[1].strip()}"
         if len(first) > self.width:
             first = first[:max(self.width - 1, 1)] + "…"
         return first
