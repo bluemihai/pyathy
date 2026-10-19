@@ -5,6 +5,7 @@ When I input 4
 When I input 4, left, no
 When I input "Lovelace, Ada", blue
 When I input enter
+When I input enter, q
 When I answer 4
 When I type 4
 ```
@@ -13,9 +14,9 @@ When I type 4
 
 Types these answers, one per question, and lets the program run until it asks for something
 not yet scripted, or ends. Answers are separated by commas; an answer that holds a comma, or
-starts or ends with a space, goes between double quotes. `I input enter` on its own (also
-`nothing`, `an empty string`) presses enter with nothing typed; in a list, write the empty
-answer as `""`, since `enter` in a list is typed as the word. `I answer`, `I type` and
+starts or ends with a space, goes between double quotes. `enter` (also `nothing`, `an empty
+string`, `""`, in any case) presses enter with nothing typed, on its own or as one answer of
+the list: `I input enter, q`. To type the word, quote it: `"enter"`. `I answer`, `I type` and
 `I enter` are the same step. Each answer feeds one `input()` call or one line read from
 `sys.stdin`. The program keeps the answers it has not used yet, so `I input 4` then
 `I input 5` is the same as `I input 4, 5`.
@@ -40,9 +41,8 @@ Feature: Greeting
     When I input "Lovelace, Ada", blue
     Then "Hi Lovelace, Ada, blue it is." is printed
 
-  Scenario: just enter
-    When I input enter
-    And I input red
+  Scenario: just enter, then red
+    When I input enter, red
     Then "Hi , red it is." is printed
 ```
 

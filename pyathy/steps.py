@@ -51,13 +51,19 @@ def _register(parsed, file):
     return register
 
 
+EMPTY = re.compile(r"enter|nothing|(?:with )?(?:an? )?empty (?:string|line)", re.IGNORECASE)
+
+
 def values(text):
-    """'-3' -> ['-3'];  '"Ada Lovelace"' -> ['Ada Lovelace'];  '1, 2, 3' -> ['1', '2', '3']."""
-    text = text.strip()
-    if re.fullmatch(r"(?:an? )?empty string|with (?:an? )?empty string|enter|nothing", text):
-        return [""]
-    found = re.findall(r'\s*"([^"]*)"\s*|([^,]+)', text)
-    return [quoted if quoted or not bare else bare.strip() for quoted, bare in found]
+    """'-3' -> ['-3'];  '"Ada Lovelace"' -> ['Ada Lovelace'];  '1, 2, 3' -> ['1', '2', '3'].
+    An unquoted `enter`, `nothing` or `an empty string` (whole, or one item of the list) is the
+    empty line, in any case; quoted, `"enter"` is the word."""
+    found = re.findall(r'\s*"([^"]*)"\s*|([^,]+)', text.strip())
+    return [quoted if quoted or not bare else value(bare.strip()) for quoted, bare in found]
+
+
+def value(bare):
+    return "" if EMPTY.fullmatch(bare) else bare
 
 
 def norm(text):
@@ -186,7 +192,7 @@ def answer_after_roll(program, name, answer):
         since = announcements(program, program.turn_start)
         went = f"went on to {since[-1][1]}'s turn" if since else "asked nothing"
         fail(program, f"{name} rolled and should have been asked something (to answer {answer!r}), but the program {went}")
-    program.type(answer)
+    program.type(*values(answer))
 
 
 @step("the players are {names}")
