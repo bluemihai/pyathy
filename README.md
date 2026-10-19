@@ -7,6 +7,18 @@ your program, fix its dice rolls, and check what it prints. pyathy runs each sce
 against a fresh start of your `main.py` and shows each run, then one line per scenario plus a total.
 It is built on [pytest-bdd](https://github.com/pytest-dev/pytest-bdd) and needs Python 3.11+.
 
+## From a clone of this repo
+
+```
+python -m venv .venv
+.venv/bin/pip install .          # Windows: .venv\Scripts\pip install .
+cd examples/tictactoe
+../../.venv/bin/pyathy           # Windows: ..\..\.venv\Scripts\pyathy
+```
+
+That runs the tic-tac-toe example's features against its `main.py`. `scripts/try-examples.sh`
+runs every example; `scripts/build-folder.sh` builds the `pyathy/` folder below.
+
 ## Run it
 
 Put the `pyathy` folder next to your program, so the folder looks like this:
