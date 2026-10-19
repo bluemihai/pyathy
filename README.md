@@ -12,6 +12,10 @@ can be read, and written, by people new to programming: the steps are the words 
 would use at the keyboard, and no code is needed. It tests any Python command-line program,
 anywhere, the same way.
 
+Ruby has this layer already: [Aruba](https://github.com/cucumber/aruba) gives Cucumber
+ready-made steps for command-line programs (run it, type this, expect that output). Python's
+pytest-bdd has no such layer; pyathy is that layer for Python.
+
 ## Install and use
 
 Three ways to get the command. They run the same features the same way.
