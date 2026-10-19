@@ -1,5 +1,7 @@
 """The scenarios that failed last time, remembered in .pyathy/last-run.json in the student's
 folder (pyathy's own file; pytest's cache stays off), and --next-failure, which runs them first.
+A runner that must not write into that folder (a teacher's acceptance-test install) sets
+PYATHY_LASTRUN to the folder whose .pyathy/last-run.json is used instead.
 
 A scenario is identified across runs by its feature file (relative to the folder pyathy runs
 in), its name as written in the file, and its Scenario Outline row, if any.

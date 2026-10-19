@@ -25,6 +25,8 @@ Options, each with a short and a long form:
 
 `--next-failure` (as in rspec) reads the failures pyathy remembered in `.pyathy/last-run.json`
 (rewritten after every run; safe to gitignore); when all of them pass it runs everything else.
+A runner that must not write into the program's folder (a teacher's acceptance-test install)
+sets `PYATHY_LASTRUN` to the folder whose `.pyathy/last-run.json` pyathy reads and rewrites instead.
 `--solution` is for the teacher's folder, where the reference program sits in `_solution/` next
 to the program under test: the features are checked against the reference, and the report's
 first line names it (`Program: _solution/main.py`).

@@ -435,7 +435,7 @@ def run(args):
         print(f"Program: {os.path.relpath(os.environ['PYATHY_APP'])}")
     if how:
         print(f"Python: {python} ({how})")
-    lastrun = LastRun(folder)  # the failures are remembered next to the program that failed
+    lastrun = LastRun(os.environ.get("PYATHY_LASTRUN", folder))  # remembered next to the program that failed, or where PYATHY_LASTRUN says
     plugins = []
     if next_failure:
         if lastrun.failed:
