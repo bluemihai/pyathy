@@ -16,7 +16,7 @@ Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
 
 ## Typing
 
-- [`I input 4` / `I input 4, left, no` / `I input enter`](steps/i-input.md): type answers, one per question; `enter` alone presses enter
+- [`I input 4` / `I input 4, left, no` / `I input enter`](steps/i-input.md): type answers, one per question; `enter` presses enter, on its own or as one answer of the list
 
 ## Dice and random
 

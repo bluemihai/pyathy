@@ -126,7 +126,7 @@ state](docs/saved-games.md) (`a saved game:`, `the program is started again`).
 | [`the program other.py`](docs/steps/the-program-other-py.md) | run `other.py` instead of `main.py` |
 | [`the program may take 30 seconds`](docs/steps/the-program-may-take.md) | wait longer for a slow program (default 10) |
 | [`I input 4`](docs/steps/i-input.md) / [`I input 4, left, no`](docs/steps/i-input.md) | type answers, one per question |
-| [`I input enter`](docs/steps/i-input.md) | just press enter |
+| [`I input enter`](docs/steps/i-input.md) / [`I input enter, q`](docs/steps/i-input.md) | press enter, on its own or as one answer of the list (quote `"enter"` to type the word) |
 | [`I roll 6`](docs/steps/i-roll.md) / [`I roll 3 and 4`](docs/steps/i-roll.md) | the next dice show these faces |
 | [`the random choice is red`](docs/steps/the-random-choice-is.md) | the next random pick returns this value |
 | [`red rolls 6`](docs/steps/rolls.md) / [`Ann rolls 4+6`](docs/steps/rolls.md) | `I input enter` (if the program is waiting for it) then `I roll 6`, after checking it is red's turn: the last line announcing a turn names red and no other player, without digits (`Player red:`) |
