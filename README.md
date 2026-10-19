@@ -69,7 +69,7 @@ summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of
 `-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
 first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
 the full output. Every report (and `pyathy steps`, `pyathy -h`) ends with a dim
-`pyathy 0.5.0 · <where it runs from>` line, under TOTAL and its hint, the same origin `-v`
+`pyathy 0.1.7 · <where it runs from>` line, under TOTAL and its hint, the same origin `-v`
 (`--version`) prints, so two copies of pyathy on one machine are never confused:
 the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv tool install -e`,
 or `installed: <site-packages>/pyathy`.
