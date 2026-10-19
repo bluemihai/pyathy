@@ -4,6 +4,10 @@ Every step works after `Given`, `When`, `Then`, `And` or `But`. Each page shows 
 written in a feature, what it checks or sets, when it is needed, a small scenario that runs,
 and the message it fails with. `python pyathy steps` prints the same list in the terminal.
 
+Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
+[turn-based games](turns.md), [starting from a saved state](saved-games.md),
+[your own steps](own-steps.md).
+
 ## Starting the program
 
 - [`I start the program` / `I run the program with puzzle.txt --hard`](steps/start-the-program.md): run `main.py` until it asks something or ends, with these command-line arguments if any
