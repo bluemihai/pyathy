@@ -20,8 +20,8 @@ pytest-bdd has no such layer; pyathy is that layer for Python.
 
 Three ways to get the command. They run the same features the same way.
 
-**No install: the `pyathy/` folder next to `main.py`.** This is what a student package holds
-(built from this repo by `scripts/build-folder.sh` into `dist/pyathy/`, pytest-bdd inside):
+**No install: the `pyathy/` folder next to `main.py`.** The folder is built from this repo by
+`scripts/build-folder.sh` into `dist/pyathy/`, with pytest-bdd inside, so nothing needs installing:
 
 ```
 my-game/
@@ -34,6 +34,8 @@ my-game/
 ```
 python pyathy
 ```
+
+In a course, an assignment's package is this folder plus its `features/`, zipped.
 
 **Poetry**, with that same `pyathy/` folder in the project:
 
