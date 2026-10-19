@@ -17,5 +17,9 @@ Options (short and long form):
   -h,  --help               this help
   -v,  --version            pyathy's version and where it runs from
 
+You can also install it, so the command is `pyathy` instead of `python pyathy`:
+  in a Poetry project:  poetry add ./pyathy     then  poetry run pyathy
+  with pip, in a venv:  pip install ./pyathy    then  pyathy
+
 pyathy's own code is in pyathy/pyathy/. lib/ holds the libraries it uses
 (pytest, pytest-bdd and theirs); you never need to open it.

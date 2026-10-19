@@ -75,8 +75,9 @@ the unzipped `pyathy/` folder, `editable: <repo>` for a `pip install -e` / `uv t
 or `installed: <site-packages>/pyathy`.
 
 The `pyathy` folder is built from this repo with `scripts/build-folder.sh` (it lands in
-`dist/pyathy/`, with pytest-bdd inside, so nothing needs installing). You can also install
-pyathy as a command with `pip install .` and run `pyathy` instead of `python pyathy`.
+`dist/pyathy/`, with pytest-bdd inside, so nothing needs installing). You can also install it,
+so the command is `pyathy` instead of `python pyathy`: in a Poetry project `poetry add ./pyathy`,
+then `poetry run pyathy`; with pip, in a venv, `pip install ./pyathy`, then `pyathy`.
 
 ## Check your features
 

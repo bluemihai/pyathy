@@ -1,0 +1,22 @@
+# Copied into dist/pyathy/ by scripts/build-folder.sh, with the version stamped from
+# pyathy/__init__.py, so a student can `poetry add ./pyathy` or `pip install ./pyathy`.
+# The wheel holds only the pyathy package: lib/ stays behind, the dependency below replaces it.
+[project]
+name = "pyathy"
+version = "0.0.0"
+description = "Test a Python command-line program with scenarios written in plain English"
+requires-python = ">=3.11"
+dependencies = ["pytest-bdd>=9"]
+
+[project.scripts]
+pyathy = "pyathy.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pyathy"]
+
+# Poetry reads the metadata from this file instead of scanning lib/ for the first *.dist-info.
+[tool.poetry]

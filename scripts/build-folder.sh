@@ -3,6 +3,8 @@
 # their main.py and run with `python pyathy`. No install, pure Python, any OS.
 #   dist/pyathy/__main__.py   bootstrap (source: packaging/__main__.py)
 #   dist/pyathy/README.txt    what this is (source: packaging/README.txt)
+#   dist/pyathy/pyproject.toml so `poetry add ./pyathy` / `pip install ./pyathy` work too
+#                             (source: packaging/pyproject.toml, version stamped from pyathy/__init__.py)
 #   dist/pyathy/pyathy/       pyathy's own code
 #   dist/pyathy/lib/          pytest-bdd, pytest and their dependencies
 # Rebuild after every change.
@@ -19,6 +21,8 @@ rm -rf "$OUT/lib/pyathy" "$OUT/lib"/pyathy-*.dist-info
 mkdir "$OUT/pyathy"
 cp "$HERE"/pyathy/*.py "$OUT/pyathy/"
 cp "$HERE/packaging/__main__.py" "$HERE/packaging/README.txt" "$OUT/"
+VERSION="$(sed -n 's/^__version__ = "\(.*\)"/\1/p' "$HERE/pyathy/__init__.py")"
+sed "s/^version = .*/version = \"$VERSION\"/" "$HERE/packaging/pyproject.toml" > "$OUT/pyproject.toml"
 
 # trim: console scripts, markupsafe's
 # compiled speedups (it falls back to pure Python), install bookkeeping, caches
