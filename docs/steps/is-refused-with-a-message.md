@@ -9,9 +9,14 @@ Then "orange" is refused with a message
 Looks back at the place where the scenario typed `orange` (with [`I input`](i-input.md))
 and checks what came after it: a message was printed, and then the same question was asked
 again. The question is the line the answer was typed on (`Pick red or green: `), or the
-line above it when the answer was typed on an empty line. The message is any other
-non-empty line between the answer and the repeated question. When `orange` was typed more
-than once, one refusal is enough.
+line above it when the answer was typed on an empty line. The message is a non-empty line
+between the answer and the repeated question that is not part of what the program prints
+every time it asks that question: a menu printed again before the question is not a
+message, `Invalid option!` above that menu is. When `orange` was typed more than once, one
+refusal is enough.
+
+`"" is refused with a message` checks an empty answer: pressing enter
+(`I input enter`).
 
 ## Why you need it
 
@@ -47,7 +52,8 @@ print(f"{colour.capitalize()} it is.")
 - `after 'orange' was typed, the same question should be asked again ('Pick red or
   green:')`: the program took the answer, or asked something else, or ended.
 - `after 'orange' was typed, a message should be printed before the question is asked
-  again`: the question came back with nothing said in between.
+  again`: the question came back with nothing said in between, or with only the menu
+  the program prints every time.
 
 Each ends with where the program is and its last lines.
 

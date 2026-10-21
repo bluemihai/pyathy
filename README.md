@@ -148,7 +148,7 @@ state](docs/saved-games.md) (`a saved game:`, `the program is started again`).
 | [`the output starts with "Welcome"`](docs/steps/the-output-starts-with.md) | the very first output |
 | [`the output shows:`](docs/steps/the-output-shows.md) + lines between `"""` | these lines, in a row |
 | [`the program asks "Your name?"`](docs/steps/the-program-asks.md) | it is now waiting for input after that question |
-| [`"orange" is refused with a message`](docs/steps/is-refused-with-a-message.md) | after typing it, a message was printed and the same question was asked again |
+| [`"orange" is refused with a message`](docs/steps/is-refused-with-a-message.md) | after typing it, a message was printed and the same question was asked again (a menu printed every time is not the message; `""` is pressing enter) |
 | [`the program ends`](docs/steps/the-program-ends.md) / [`the program is still running`](docs/steps/the-program-is-still-running.md) | |
 | [`a file "photos/beach.jpg"`](docs/steps/a-file.md) | an empty file in the folder before the program starts (its folders made too) |
 | [`a file "game.txt" containing "round 3"`](docs/steps/a-file-containing.md) | put this one-line file in the folder before the program starts |

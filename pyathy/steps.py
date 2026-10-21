@@ -323,26 +323,43 @@ def asks(program, text):
         fail(program, f'expected the program to ask "{text}"')
 
 
-@step('"{text}" is refused with a message')
-def refused(program, text):
-    """After typing it, a message was printed and the same question was asked again."""
+@step('"{text}" is refused with a message', '"" is refused with a message')
+def refused(program, text=""):
+    """After typing it (`""`: pressing enter), a message was printed and the same question was
+    asked again. The message is a line printed between the answer and the repeated question that
+    is not part of what the program prints every time it asks that question, such as its menu."""
     program.settle()
     out = program.output  # raw: `typed` indexes into it; what is read from it is made plain
     typed = program.typed
     tries = [k for k, (start, end) in enumerate(typed) if out[start:end] == text]
     if not tries:
         fail(program, f"{text!r} was never typed")
+    # what the program printed before each answer, and after the last one
+    blocks = [plain(out[a:b]) for a, b in zip([0] + [end for _, end in typed],
+                                               [start for start, _ in typed] + [len(out)])]
     for k in tries:
-        start, end = typed[k]
-        question = plain(question_before(out, start))
-        after = plain(out[end:typed[k + 1][0] if k + 1 < len(typed) else len(out)])
+        question = plain(question_before(out, typed[k][0]))
+        after = blocks[k + 1]
         asked_again = bool(question) and question in after
-        message = any(line.strip() and line.strip() != question for line in after.splitlines())
-        if asked_again and message:
+        if not asked_again:
+            continue
+        # the lines that come before this question every time it is asked up to now (a menu)
+        leads = [lead_in(block, question) for block in blocks[:k + 2] if question in block]
+        same = 0
+        while all(len(lead) > same for lead in leads) and len({lead[-1 - same] for lead in leads}) == 1:
+            same += 1
+        message = leads[-1][:len(leads[-1]) - same]
+        if any(line != question for line in message):
             return
     if not asked_again:
         fail(program, f"after {text!r} was typed, the same question should be asked again ({question!r})")
     fail(program, f"after {text!r} was typed, a message should be printed before the question is asked again")
+
+
+def lead_in(block, question):
+    """The non-empty lines printed before the last time `question` is asked in `block` (text
+    printed on the question's own line, before it, counts as a line)."""
+    return [line.strip() for line in block[:block.rfind(question)].splitlines() if line.strip()]
 
 
 def question_before(out, at):

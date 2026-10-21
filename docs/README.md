@@ -41,7 +41,7 @@ Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
 - [`the output starts with "Welcome"`](steps/the-output-starts-with.md): the very first output
 - [`the output shows:` + lines between `"""`](steps/the-output-shows.md): these lines, in a row
 - [`the program asks "Your name?"`](steps/the-program-asks.md): it is now waiting for input after that question
-- [`"orange" is refused with a message`](steps/is-refused-with-a-message.md): after typing it, a message was printed and the same question asked again
+- [`"orange" is refused with a message`](steps/is-refused-with-a-message.md): after typing it, a message was printed and the same question asked again (a menu printed every time is not the message; `""` is pressing enter)
 
 ## Ending
 

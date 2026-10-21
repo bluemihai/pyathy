@@ -82,7 +82,7 @@ STEPS = {
         ('the output starts with {"Welcome"}', ""),
         ("the output shows:", "these lines in a row (put them\nbetween two lines of three quotes)"),
         ('the program asks {"Player X, choose a square (1-9):"}', ""),
-        ('{"orange"} is refused with a message', "after typing it, a message was printed and\nthe same question was asked again"),
+        ('{"orange"} is refused with a message', "after typing it, a message was printed and\nthe same question was asked again (a menu printed\nevery time is not the message; \"\" is pressing enter)"),
         ("the program ends", ""),
         ("the program is still running", ""),
     ],
