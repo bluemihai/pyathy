@@ -144,17 +144,17 @@ class Report:
 
     def reason(self, error):
         """Why a scenario failed, indented under its ✘ line: the whole message, or under -q
-        its first non-empty line cut to the terminal's width (the rest is a run without -q).
-        On a terminal the lines are coloured by what they say (reason_lines)."""
+        its first non-empty line and its `note:` lines, cut to the terminal's width (the rest is
+        a run without -q). On a terminal the lines are coloured by what they say (reason_lines)."""
         if not self.quiet:
             return "\n".join(f"      {line}" for line in self.reason_lines(error.splitlines()))
         filled = [line for line in error.splitlines() if line.strip()]
         first = filled[0] if filled else "?"
         if first.rstrip().endswith(":") and len(filled) > 1:  # "expected these lines, in a row:" + the first one
             first = f"{first.rstrip()} {filled[1].strip()}"
-        if len(first) + 6 > self.width:
-            first = first[:max(self.width - 7, 1)] + "…"
-        return "      " + self.reason_line(first)
+        shown = [first] + [line for line in filled[1:] if line.startswith("note: ")]
+        cut = [line if len(line) + 6 <= self.width else line[:max(self.width - 7, 1)] + "…" for line in shown]
+        return "\n".join("      " + self.reason_line(line) for line in cut)
 
     def reason_lines(self, lines):
         """The lines of a reason, coloured by meaning. The block of lines the scenario expected
@@ -247,7 +247,10 @@ class Report:
         if hasattr(item, "pyathy_program"):
             self.programs[item.nodeid] = item.pyathy_program
         if call.excinfo is not None and item.nodeid not in self.errors:
-            self.errors[item.nodeid] = str(call.excinfo.value)
+            # a *steps.py may set program.explain: what it adds under any failure (a cause it can see)
+            explain = getattr(getattr(item, "pyathy_program", None), "explain", None)
+            note = explain() if explain else None
+            self.errors[item.nodeid] = str(call.excinfo.value) + (f"\nnote: {note}" if note else "")
 
     def pytest_runtest_logfinish(self, nodeid, location):
         feature = self.features.get(nodeid)
