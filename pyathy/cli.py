@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 from importlib.metadata import PackageNotFoundError, distribution
 
 import pytest
@@ -54,6 +55,8 @@ scenarios({paths})
 
 MAX_TRANSCRIPT = 200  # lines of one scenario's run shown (its first 150, its last 50); the rest is counted
 PIPED_WIDTH = 120     # columns a -q reason line is cut to when the output is not a terminal
+OUTPUTS = ("show", "hide", "slow")  # -o: the program's output in the report
+DELAY = 0.1           # seconds after each line of the program's output under -o slow
 
 # The shapes of a reason's lines, coloured by meaning (the text itself is never changed):
 # `expected X, but Y` splits where the observed part starts; a block of `    | ` lines follows a
@@ -94,9 +97,12 @@ class Report:
     """pyathy's own output instead of pytest's. By default each scenario's run as a terminal
     would show it (prompts, typed answers, boards), then its ✔/✘ line with the reason under a
     ✘; after all scenarios a summary of the ✔/✘ lines and the TOTAL line graders read.
-    quiet: only the ✔/✘ lines (a ✘ with its reason's first line) and TOTAL."""
+    quiet: only the ✔/✘ lines (a ✘ with its reason's first line) and TOTAL.
+    output: "show" the program's output, "hide" it, or "slow": show it a line at a time,
+    `delay` seconds after each (only on a terminal; piped, it is shown at once)."""
 
-    def __init__(self, broken=0, quiet=False, lastrun=None, next_failure=None):
+    def __init__(self, broken=0, quiet=False, lastrun=None, next_failure=None,
+                 output="show", delay=DELAY, sleep=time.sleep):
         self.errors = {}
         self.feature = None
         self.passed = 0
@@ -112,6 +118,9 @@ class Report:
         self.keys, self.collected, self.count = {}, [], 0
         self.ran, self.failed = set(), set()
         self.command = command()
+        self.output = output
+        self.delay = delay if output == "slow" and sys.stdout.isatty() else 0
+        self.sleep = sleep
 
     def style(self, code, text):
         return self.styler.style(code, text)
@@ -141,6 +150,15 @@ class Report:
             lines = lines[:head] + [self.style(2, f"… ({more} more lines)")] + lines[head + more:]
         gutter = self.style(2, "  │ ")
         return [gutter + line for line in lines]
+
+    def show(self, lines):
+        """Print the transcript's lines; under -o slow on a terminal, a pause after each."""
+        if not self.delay:
+            print("\n".join(lines))
+            return
+        for line in lines:
+            print(line, flush=True)
+            self.sleep(self.delay)
 
     def reason(self, error):
         """Why a scenario failed, indented under its ✘ line: the whole message, or under -q
@@ -258,9 +276,9 @@ class Report:
         if feature is not None and feature != self.feature:
             self.feature = feature
             print(f"\n{self.style(1, f'Feature: {feature}')}")
-        if not self.quiet:
+        if not self.quiet and self.output != "hide":
             print(f"\n  Scenario: {name}")
-            print("\n".join(self.transcript(self.programs.get(nodeid))))
+            self.show(self.transcript(self.programs.get(nodeid)))
         self.programs.pop(nodeid, None)
         self.total += 1
         self.ran.add(self.keys.get(nodeid))
@@ -357,7 +375,8 @@ def init():
 FLAGS = {"-q": "quiet", "--quiet": "quiet",
          "-ff": "fail_fast", "--fail-fast": "fail_fast", "-x": "fail_fast",
          "-nf": "next_failure", "--next-failure": "next_failure",
-         "-s": "solution", "--solution": "solution"}
+         "-s": "solution", "--solution": "solution",
+         "-o": "output", "--output": "output", "--delay": "delay"}
 SOLUTION = "_solution"
 
 
@@ -370,7 +389,8 @@ def has_features(path):
 
 def parse(args):
     """(targets, options, flags for pytest). options: pyathy's own flags by their long name;
-    "solution" holds the folder name -s was given (`-s NAME`, `-s=NAME`, or the default)."""
+    "solution" holds the folder name -s was given (`-s NAME`, `-s=NAME`, or the default);
+    "output" and "delay" the value after -o and --delay (`-o hide`, `--delay=0.05`), checked in run()."""
     targets, options, flags = [], {}, []
     i = 0
     while i < len(args):
@@ -380,6 +400,10 @@ def parse(args):
             if not value and i < len(args) and not args[i].startswith("-") and not has_features(args[i]):
                 value, i = args[i], i + 1
             options["solution"] = value or SOLUTION
+        elif FLAGS.get(name) in {"output", "delay"}:
+            if not value and i < len(args):
+                value, i = args[i], i + 1
+            options[FLAGS[name]] = value
         elif arg in FLAGS:
             options[FLAGS[arg]] = True
         elif arg.startswith("-"):
@@ -405,6 +429,17 @@ def run(args):
     quiet, fail_fast = options.get("quiet", False), options.get("fail_fast", False)
     next_failure = options.get("next_failure", False)
     flags += ["-x"] if fail_fast else []
+    output = options.get("output", "slow" if "delay" in options else "show")
+    if output not in OUTPUTS:
+        print(f"pyathy: -o takes {', '.join(OUTPUTS)}, not {output or 'nothing'}")
+        return 2
+    try:
+        delay = float(options.get("delay", DELAY))
+    except ValueError:
+        delay = -1
+    if delay < 0:
+        print(f"pyathy: --delay takes a number of seconds, like 0.1, not {options['delay'] or 'nothing'}")
+        return 2
     files = []
     for t in targets:
         if os.path.isdir(t):
@@ -448,7 +483,7 @@ def run(args):
             plugins.append(NextFailure(lastrun.failed))
         else:
             print(f"{command()} --next-failure: no scenario failed last time; running everything.")
-    report = Report(broken, quiet, lastrun, plugins[0] if plugins else None)
+    report = Report(broken, quiet, lastrun, plugins[0] if plugins else None, output, delay)
     if not good:
         report.pytest_sessionfinish(None)
         return 1

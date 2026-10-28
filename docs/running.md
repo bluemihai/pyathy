@@ -19,6 +19,8 @@ Options, each with a short and a long form:
 -ff, --fail-fast          stop at the first scenario that fails
 -nf, --next-failure       run the scenarios that failed last time, in order, stopping at the first that still fails
 -s,  --solution [FOLDER]  run the features here against ./_solution/main.py, or ./FOLDER/main.py (-s obj2 means _solution-obj2)
+-o,  --output show|hide|slow  the program's output in the report: show it (the default), hide it, or slow: a line at a time, to read along (on a terminal only)
+     --delay SECONDS      the pause after each line under -o slow (default 0.1: a 100-line run takes 10 seconds; --delay alone means -o slow)
 -h,  --help               this help
 -v,  --version            pyathy's version and where it runs from
 ```
@@ -44,6 +46,12 @@ summary of every `✔`/`✘` line per feature, and the last line is `TOTAL  n of
 `-q` (or `--quiet`) only the `✔`/`✘` lines and the TOTAL line are printed, each `✘` with the
 first line of its reason (cut to the terminal's width), then a hint to run without `-q` for
 the full output.
+
+`-o hide` (or `--output hide`) drops what the program printed and keeps the rest as it is:
+every `✔`/`✘` line with its whole reason, the summary and TOTAL (`-q` keeps only a reason's first
+line). `-o slow` shows the program's output a line at a time, with a pause after each line
+(`--delay SECONDS`, default 0.1), so a person can read along; it pauses only on a terminal, so
+piped (CI, `| grep`) it is the same as `-o show`.
 
 ## Which pyathy is running
 

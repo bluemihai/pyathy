@@ -74,6 +74,8 @@ Options, each with a short and a long form:
 -ff, --fail-fast          stop at the first scenario that fails
 -nf, --next-failure       run the scenarios that failed last time, in order, stopping at the first that still fails
 -s,  --solution [FOLDER]  run the features here against ./_solution/main.py, or ./FOLDER/main.py (-s obj2 means _solution-obj2)
+-o,  --output show|hide|slow  the program's output in the report: show it (the default), hide it, or slow: a line at a time, to read along (on a terminal only)
+     --delay SECONDS      the pause after each line under -o slow (default 0.1: a 100-line run takes 10 seconds; --delay alone means -o slow)
 -h,  --help               this help
 -v,  --version            pyathy's version and where it runs from
 ```
