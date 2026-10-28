@@ -134,6 +134,7 @@ state](docs/saved-games.md) (`a saved game:`, `the program is started again`).
 | [`the program other.py`](docs/steps/the-program-other-py.md) | run `other.py` instead of `main.py` |
 | [`the program may take 30 seconds`](docs/steps/the-program-may-take.md) | wait longer for a slow program (default 10) |
 | [`main.py has DEBUG = True`](docs/steps/file-has-constant.md) | before it starts, set `DEBUG = …` at the top of `main.py` to this Python value (in the copy; your file stays as it is) |
+| [`main.py has a DEBUG setting`](docs/steps/file-has-setting.md) | `main.py` has `DEBUG = …` at the top, outside any function (only checks it is there; sets nothing) |
 | [`I input 4`](docs/steps/i-input.md) / [`I input 4, left, no`](docs/steps/i-input.md) | type answers, one per question |
 | [`I input enter`](docs/steps/i-input.md) / [`I input enter, q`](docs/steps/i-input.md) | press enter, on its own or as one answer of the list (quote `"enter"` to type the word) |
 | [`I roll 6`](docs/steps/i-roll.md) / [`I roll 3 and 4`](docs/steps/i-roll.md) | the next dice show these faces |

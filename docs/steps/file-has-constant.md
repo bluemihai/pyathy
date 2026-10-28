@@ -54,5 +54,6 @@ program`: move the step up, before the first input or check.
 
 ## See also
 
+[`main.py has a DEBUG setting`](file-has-setting.md) ·
 [`the program other.py`](the-program-other-py.md) ·
 [`a file "game.txt" with:`](a-file-with.md)

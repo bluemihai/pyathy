@@ -120,6 +120,13 @@ def has_constant(program, name, constant, text):
     program.write_file(name, with_value(source_of(program, name), name, constant, text))
 
 
+@_re(r"(?P<name>[\w./-]+\.py) has an? (?P<constant>[A-Za-z_]\w*) setting")
+def has_setting(program, name, constant):
+    """`main.py has a DEBUG setting`: main.py has a top-level `DEBUG = …` (outside any function).
+    Only reads the file (or the copy an earlier step wrote), so it may come before or after the start."""
+    top_level_value(source_of(program, name), name, constant)
+
+
 def source_of(program, name):
     """The text the copy will get for this file: what a step already put there, else the file."""
     staged = [text for staged_name, text in program.files if staged_name == name]
@@ -132,12 +139,13 @@ def source_of(program, name):
         return f.read()
 
 
-def with_value(source, name, constant, text):
-    """`source` with the value of its last top-level `constant = …` replaced by `text`."""
+def top_level_value(source, name, constant, why=""):
+    """The value node of the last top-level `constant = …` (plain or annotated) in `source`;
+    a ProgramError naming the fix when there is none. `why` follows the "at the top" part."""
     try:
         tree = ast.parse(source)
     except SyntaxError as e:
-        raise ProgramError(f"{name} has a syntax error on line {e.lineno}, so {constant} could not be set: {e.msg}") from None
+        raise ProgramError(f"{name} has a syntax error on line {e.lineno}, so {constant} could not be found: {e.msg}") from None
     node = None
     for statement in tree.body:
         targets = (statement.targets if isinstance(statement, ast.Assign)
@@ -145,8 +153,14 @@ def with_value(source, name, constant, text):
         if any(isinstance(t, ast.Name) and t.id == constant for t in targets) and statement.value is not None:
             node = statement.value
     if node is None:
-        raise ProgramError(f"{name} has no {constant} = … at the top (outside any function), so the scenario"
-                           f" cannot set it: put {constant} = … at the top of {name}")
+        raise ProgramError(f"{name} has no {constant} = … at the top (outside any function){why}:"
+                           f" put {constant} = … at the top of {name}")
+    return node
+
+
+def with_value(source, name, constant, text):
+    """`source` with the value of its last top-level `constant = …` replaced by `text`."""
+    node = top_level_value(source, name, constant, ", so the scenario cannot set it")
     lines = source.splitlines(keepends=True)
     # ast columns count UTF-8 bytes
     head = lines[node.lineno - 1].encode()[:node.col_offset].decode()

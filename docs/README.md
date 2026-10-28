@@ -14,6 +14,7 @@ Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
 - [`the program other.py`](steps/the-program-other-py.md): run `other.py` instead of `main.py`
 - [`the program may take 30 seconds`](steps/the-program-may-take.md): wait longer for a slow program (default 10)
 - [`main.py has DEBUG = True`](steps/file-has-constant.md): before it starts, set `DEBUG = …` at the top of `main.py` to this value (in the copy only)
+- [`main.py has a DEBUG setting`](steps/file-has-setting.md): `main.py` has `DEBUG = …` at the top, outside any function (only checks it is there)
 
 ## Typing
 

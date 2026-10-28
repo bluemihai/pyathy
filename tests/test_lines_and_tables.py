@@ -5,7 +5,7 @@ import textwrap
 import pytest
 
 from pyathy.program import Program, ProgramError
-from pyathy.steps import has_constant, line_also_has, row_has
+from pyathy.steps import has_constant, has_setting, line_also_has, row_has
 
 BOX = """
 SHOW = False
@@ -81,6 +81,54 @@ def test_constant_after_the_start(tmp_path):
     with pytest.raises(ProgramError, match="must come before"):
         has_constant(program, "main.py", "SHOW", "True")
     program.close()
+
+
+def test_setting_present(tmp_path):
+    program = program_for(tmp_path, BOX)
+    has_setting(program, "main.py", "SHOW")
+    program.type("Ann")
+    has_setting(program, "main.py", "SHOW")  # after the start too
+    program.close()
+
+
+def test_setting_annotated(tmp_path):
+    program = program_for(tmp_path, "SHOW: bool = False\nprint(SHOW)\n")
+    has_setting(program, "main.py", "SHOW")
+    program.close()
+
+
+def test_setting_missing(tmp_path):
+    program = program_for(tmp_path, "print('hi')\n")
+    with pytest.raises(ProgramError, match=r"main.py has no SHOW = … at the top \(outside any function\): put SHOW = … at the top of main.py"):
+        has_setting(program, "main.py", "SHOW")
+    with pytest.raises(ProgramError, match="there is no other.py"):
+        has_setting(program, "other.py", "SHOW")
+    program.close()
+
+
+def test_setting_only_inside_a_function(tmp_path):
+    program = program_for(tmp_path, "def f():\n    SHOW = True\n")
+    with pytest.raises(ProgramError, match="main.py has no SHOW"):
+        has_setting(program, "main.py", "SHOW")
+    program.close()
+
+
+def test_setting_sees_a_staged_copy(tmp_path):
+    program = program_for(tmp_path, "print('hi')\n")
+    program.write_file("main.py", "SHOW = 1\nprint('hi')\n")
+    has_setting(program, "main.py", "SHOW")
+    program.close()
+
+
+def test_setting_step_does_not_collide():
+    from pyathy import steps
+
+    def hits(line):
+        return [fn.__name__ for _, _, parser, fn in steps.REGISTERED if parser.is_matching(line)]
+
+    assert hits("main.py has a SHOW setting") == ["has_setting"]
+    assert hits("main.py has an ITEM setting") == ["has_setting"]
+    assert hits("main.py has SHOW = True") == ["has_constant"]
 
 
 def test_line_also_has(tmp_path):

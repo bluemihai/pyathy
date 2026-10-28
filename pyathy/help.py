@@ -57,6 +57,8 @@ STEPS = {
         ("the program may take {30} seconds", "wait this long for a slow program (default 10)"),
         ("{main.py} has {DEBUG} = {True}", "before the program starts, set DEBUG = … at the top of main.py\n"
                                            "to this Python value (in the copy; your file stays as it is)"),
+        ("{main.py} has a {DEBUG} setting", "main.py has DEBUG = … at the top (outside any function);\n"
+                                         "only checks it is there, before or after the start"),
     ],
     "Typing": [
         ("I input {4}", "type 4 when the program asks"),
