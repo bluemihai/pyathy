@@ -13,6 +13,7 @@ Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
 - [`I start the program` / `I run the program with puzzle.txt --hard`](steps/start-the-program.md): run `main.py` until it asks something or ends, with these command-line arguments if any
 - [`the program other.py`](steps/the-program-other-py.md): run `other.py` instead of `main.py`
 - [`the program may take 30 seconds`](steps/the-program-may-take.md): wait longer for a slow program (default 10)
+- [`main.py has DEBUG = True`](steps/file-has-constant.md): before it starts, set `DEBUG = …` at the top of `main.py` to this value (in the copy only)
 
 ## Typing
 
@@ -40,6 +41,8 @@ Guides: [running pyathy and the report](running.md), [`pyathy check`](check.md),
 - [`"Game over" is not printed`](steps/is-not-printed.md): nowhere in the output
 - [`the output starts with "Welcome"`](steps/the-output-starts-with.md): the very first output
 - [`the output shows:` + lines between `"""`](steps/the-output-shows.md): these lines, in a row
+- [`the line with "Total" also has "42"`](steps/the-line-with-also-has.md): the last line with Total in it also has 42
+- [`the "Bob" row has "7" under "Score"` / `… has nothing under "Score"`](steps/the-row-has-under.md): in the last table with a Score column (cells split by `│` or `|`), Bob's row has 7 there, or nothing
 - [`the program asks "Your name?"`](steps/the-program-asks.md): it is now waiting for input after that question
 - [`"orange" is refused with a message`](steps/is-refused-with-a-message.md): after typing it, a message was printed and the same question asked again (a menu printed every time is not the message; `""` is pressing enter)
 

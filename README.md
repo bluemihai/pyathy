@@ -131,6 +131,7 @@ state](docs/saved-games.md) (`a saved game:`, `the program is started again`).
 | [`I start the program`](docs/steps/start-the-program.md) / [`I run the program with puzzle.txt --hard`](docs/steps/start-the-program.md) | run `main.py` until it asks something or ends; `with …` starts it with these command-line arguments |
 | [`the program other.py`](docs/steps/the-program-other-py.md) | run `other.py` instead of `main.py` |
 | [`the program may take 30 seconds`](docs/steps/the-program-may-take.md) | wait longer for a slow program (default 10) |
+| [`main.py has DEBUG = True`](docs/steps/file-has-constant.md) | before it starts, set `DEBUG = …` at the top of `main.py` to this Python value (in the copy; your file stays as it is) |
 | [`I input 4`](docs/steps/i-input.md) / [`I input 4, left, no`](docs/steps/i-input.md) | type answers, one per question |
 | [`I input enter`](docs/steps/i-input.md) / [`I input enter, q`](docs/steps/i-input.md) | press enter, on its own or as one answer of the list (quote `"enter"` to type the word) |
 | [`I roll 6`](docs/steps/i-roll.md) / [`I roll 3 and 4`](docs/steps/i-roll.md) | the next dice show these faces |
@@ -147,6 +148,8 @@ state](docs/saved-games.md) (`a saved game:`, `the program is started again`).
 | [`"Game over" is not printed`](docs/steps/is-not-printed.md) | nowhere in the output |
 | [`the output starts with "Welcome"`](docs/steps/the-output-starts-with.md) | the very first output |
 | [`the output shows:`](docs/steps/the-output-shows.md) + lines between `"""` | these lines, in a row |
+| [`the line with "Total" also has "42"`](docs/steps/the-line-with-also-has.md) | the last line printed with Total in it also has 42 |
+| [`the "Bob" row has "7" under "Score"`](docs/steps/the-row-has-under.md) / [`… has nothing under "Score"`](docs/steps/the-row-has-under.md) | in the last table printed with a Score column (cells split by `│` or `\|`; tables lined up with spaces are not read), Bob's row has 7 there, or nothing |
 | [`the program asks "Your name?"`](docs/steps/the-program-asks.md) | it is now waiting for input after that question |
 | [`"orange" is refused with a message`](docs/steps/is-refused-with-a-message.md) | after typing it, a message was printed and the same question was asked again (a menu printed every time is not the message; `""` is pressing enter) |
 | [`the program ends`](docs/steps/the-program-ends.md) / [`the program is still running`](docs/steps/the-program-is-still-running.md) | |

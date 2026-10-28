@@ -4,6 +4,7 @@ Matching ignores case and trailing spaces, unless the step says "exactly", and a
 the colour codes a program prints (program.settle(), .text and .turn_output() are plain).
 """
 
+import ast
 import importlib.util
 import os
 import pathlib
@@ -103,6 +104,54 @@ def run_with(program, args):
     except ValueError as e:
         raise ProgramError(f"could not read the arguments {args!r}: {e}") from None
     program.settle()
+
+
+@_re(r"(?P<name>[\w./-]+\.py) has (?P<constant>[A-Za-z_]\w*) = (?P<text>.+)")
+def has_constant(program, name, constant, text):
+    """`main.py has DEBUG = True`: before the program starts, the scenario's copy of main.py
+    gets this value in its top-level `DEBUG = …` (the file in your folder stays as it is)."""
+    if program.state != "new":
+        raise ProgramError(f'"{name} has {constant} = …" must come before any step that starts the'
+                           " program (an input, a roll, a check): it has already started")
+    try:
+        ast.parse(text, mode="eval")
+    except SyntaxError:
+        raise ProgramError(f"{text} is not a Python value, so {constant} cannot be set to it") from None
+    program.write_file(name, with_value(source_of(program, name), name, constant, text))
+
+
+def source_of(program, name):
+    """The text the copy will get for this file: what a step already put there, else the file."""
+    staged = [text for staged_name, text in program.files if staged_name == name]
+    if staged:
+        return staged[-1]
+    path = os.path.join(os.path.dirname(program.app), name)
+    if not os.path.isfile(path):
+        raise ProgramError(f"there is no {name} in {os.path.dirname(program.app)}")
+    with open(path, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+
+def with_value(source, name, constant, text):
+    """`source` with the value of its last top-level `constant = …` replaced by `text`."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as e:
+        raise ProgramError(f"{name} has a syntax error on line {e.lineno}, so {constant} could not be set: {e.msg}") from None
+    node = None
+    for statement in tree.body:
+        targets = (statement.targets if isinstance(statement, ast.Assign)
+                   else [statement.target] if isinstance(statement, ast.AnnAssign) else [])
+        if any(isinstance(t, ast.Name) and t.id == constant for t in targets) and statement.value is not None:
+            node = statement.value
+    if node is None:
+        raise ProgramError(f"{name} has no {constant} = … at the top (outside any function), so the scenario"
+                           f" cannot set it: put {constant} = … at the top of {name}")
+    lines = source.splitlines(keepends=True)
+    # ast columns count UTF-8 bytes
+    head = lines[node.lineno - 1].encode()[:node.col_offset].decode()
+    tail = lines[node.end_lineno - 1].encode()[node.end_col_offset:].decode()
+    return "".join(lines[:node.lineno - 1] + [head + text + tail] + lines[node.end_lineno:])
 
 
 @_re(r"the program may take (?P<seconds>\d+(?:\.\d+)?) seconds?")
@@ -311,6 +360,95 @@ def shows(program, docstring):
             return
     shown = "\n".join(f"    | {line}" for line in docstring.splitlines())
     fail(program, f"expected these lines, in a row:\n{shown}")
+
+
+def printed_lines(program):
+    """Every line the program printed in this run, without the answers typed into it."""
+    program.settle()
+    out, pieces, at = program.output, [], 0
+    for start, end in program.typed:
+        pieces.append(out[at:start])
+        at = end
+    pieces.append(out[at:])
+    return plain("".join(pieces)).splitlines()
+
+
+@_re(r'the line with "(?P<text>[^"]+)" also has "(?P<also>[^"]*)"')
+def line_also_has(program, text, also):
+    """The last line printed with the first text in it also has the second (case ignored)."""
+    found = [line for line in printed_lines(program) if text.lower() in line.lower()]
+    if not found:
+        fail(program, f'expected a line with "{text}", but no line printed has it')
+    if also.lower() not in found[-1].lower():
+        fail(program, f'expected the last line with "{text}" to also have "{also}", but it is:\n'
+                      f"    | {found[-1].rstrip()}")
+
+
+BORDER = re.compile(r"[\s\-=+:─━│┃|┌┐└┘├┤┬┴┼╭╮╯╰╔╗╚╝╠╣╦╩╬═║]+")
+RULE = re.compile(r"[-=─━═]")  # a border line has one of these; a row of empty cells has not
+
+
+def cells(line):
+    """The cells of a table row (split on │ or |; the bars at both ends left off), else None."""
+    line = line.strip()
+    if "│" not in line and "|" not in line:
+        return None
+    parts = [cell.strip() for cell in re.split(r"[│|]", line)]
+    if line[0] in "│|":
+        parts = parts[1:]
+    if line[-1] in "│|":
+        parts = parts[:-1]
+    return parts
+
+
+def tables(lines):
+    """Every table printed: [rows], each row its cells. A table is lines in a row with │ or |
+    in them; border lines (├──┼──┤, +---+) are skipped."""
+    found, rows = [], []
+    for line in lines + [""]:
+        if BORDER.fullmatch(line.strip()) and RULE.search(line):
+            continue
+        row = cells(line)
+        if row is None:
+            if rows:
+                found.append(rows)
+            rows = []
+        else:
+            rows.append(row)
+    return found
+
+
+def cell_under(program, row_text, column):
+    """(the row's cells, the cell under `column`) in the last printed table with a header cell
+    `column`: the row is the first one under the header with a cell that is `row_text`, else
+    one with a cell that has it in it (case ignored)."""
+    for table in reversed(tables(printed_lines(program))):
+        heads = [i for i, row in enumerate(table) if column.lower() in (c.lower() for c in row)]
+        if heads:
+            break
+    else:
+        fail(program, f'expected a table with a column "{column}" (cells split by │ or |), but none was printed')
+    header = table[heads[-1]]
+    at = [c.lower() for c in header].index(column.lower())
+    below = table[heads[-1] + 1:]
+    want = row_text.lower()
+    rows = ([row for row in below if want in (c.lower() for c in row)]
+            or [row for row in below if any(want in c.lower() for c in row)])
+    if not rows:
+        fail(program, f'expected a row with "{row_text}" in the table with the column "{column}", but there is none')
+    return rows[0], rows[0][at] if at < len(rows[0]) else ""
+
+
+@_re(r'the "(?P<row>[^"]+)" row has (?:"(?P<want>[^"]*)"|nothing) under "(?P<column>[^"]+)"')
+def row_has(program, row, want, column):
+    """In the last table printed with a `column` header cell, the cell of the `row` row under it
+    is `want` (case ignored), or empty ("nothing")."""
+    found, have = cell_under(program, row, column)
+    want = want or ""
+    if have.lower() != want.lower():
+        what = f'"{want}"' if want else "nothing"
+        fail(program, f'expected the "{row}" row to have {what} under "{column}", but it has "{have}":\n'
+                      f"    | {' | '.join(found)}")
 
 
 @_re(r'the program asks "(?P<text>[^"]*)"')

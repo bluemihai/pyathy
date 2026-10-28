@@ -51,6 +51,8 @@ STEPS = {
         ("I run the program with {photos/ --all}",
          'start it with these command-line arguments\n(quote one with spaces: "my file.txt")'),
         ("the program may take {30} seconds", "wait this long for a slow program (default 10)"),
+        ("{main.py} has {DEBUG} = {True}", "before the program starts, set DEBUG = … at the top of main.py\n"
+                                           "to this Python value (in the copy; your file stays as it is)"),
     ],
     "Typing": [
         ("I input {4}", "type 4 when the program asks"),
@@ -81,6 +83,11 @@ STEPS = {
         ('{"Congratulations"} is not printed', ""),
         ('the output starts with {"Welcome"}', ""),
         ("the output shows:", "these lines in a row (put them\nbetween two lines of three quotes)"),
+        ('the line with {"Total"} also has {"42"}', "the last line printed with Total in it\nalso has 42 (case ignored)"),
+        ('the {"Bob"} row has {"7"} under {"Score"}', "in the last table printed with a Score column, the row\n"
+                                                    "with a cell Bob has 7 in that column (cells split by │ or |;\n"
+                                                    "tables lined up with spaces are not read)"),
+        ('the {"Bob"} row has nothing under {"Score"}', "the same, the cell is empty"),
         ('the program asks {"Player X, choose a square (1-9):"}', ""),
         ('{"orange"} is refused with a message', "after typing it, a message was printed and\nthe same question was asked again (a menu printed\nevery time is not the message; \"\" is pressing enter)"),
         ("the program ends", ""),
